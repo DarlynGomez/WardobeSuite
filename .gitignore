@@ -1,5 +1,14 @@
+# Never commit the venv folder — it's hundreds of megabytes
 venv/
+
+# Never commit secrets
 .env
+
+# Never commit the SQLite database file — it contains user data
+wardrobe.db
+
+# Python cache files — auto-generated, not needed in git
 __pycache__/
 *.pyc
-wardrobe.db
+*.pyo
+.DS_Store
