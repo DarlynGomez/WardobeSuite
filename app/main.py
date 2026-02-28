@@ -51,8 +51,13 @@ def health_check():
     return {"status": "ok"}
 
 
-# NOTE: We will add these lines in later milestones as each router is built:
-# from app.routers import auth, scan, review
-# app.include_router(auth.router, prefix="/auth", tags=["auth"])
+# Register the auth router.
+# prefix="/auth" means all routes in auth.py are available at /auth/...
+# tags=["auth"] groups them together in the /docs UI
+from app.routers import auth
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# NOTE: We will add scan and review routers in later milestones:
+# from app.routers import scan, review
 # app.include_router(scan.router, prefix="/scan", tags=["scan"])
 # app.include_router(review.router, tags=["review"])
