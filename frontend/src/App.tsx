@@ -73,7 +73,7 @@ function FilterSection({
   title: string;
   isOpen: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="border border-zinc-100 rounded-xl overflow-hidden">
