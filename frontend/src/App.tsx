@@ -106,6 +106,7 @@ const theme = {
     filterPillBg:
       "bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-700",
     // Swipe card
+    //test
     swipeCard: "bg-white border-slate-200",
   },
   dark: {
