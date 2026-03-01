@@ -1,17 +1,3 @@
-# app/routers/scan.py
-#
-# WHY THIS FILE: Triggers Gmail scanning on demand.
-# POST /scan/initial — first-time setup scan over N days
-# POST /scan/new     — incremental scan since last scan time
-#
-# KEY CHANGES FROM V1:
-# - _process_emails_into_queue now passes html_text, prices_found, image_urls
-#   to Gemini so it has full context for price and image extraction
-# - Deduplication fixed: now checks by (user_id, email_message_id, item_name)
-#   using a Python-level check BEFORE insert, so SQLite's null handling
-#   in unique indexes doesn't cause duplicate rows
-# - First image URL from email is used as fallback if Gemini doesn't assign one
-
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -235,6 +221,11 @@ def scan_initial(
     print(f"[Scan] Fetched {len(emails)} emails")
 
     result = _process_emails_into_queue(emails, user.id, db)
+
+    # HERE IS WHERE THE BUSINESS  FUNC WOULD GO 
+    # THE FUNCTION SHOULD compute and store the ncessary user related
+    # info in the database. For every scan, this func will run so that the 
+    # table stays up to date
 
     # Save scan settings so /scan/new knows where to start next time
     settings = db.query(ScanSettings).filter(ScanSettings.user_id == user.id).first()

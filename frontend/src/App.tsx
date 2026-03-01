@@ -1,10 +1,53 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, Menu, X, ArrowRight, ChevronLeft, ChevronRight, User, Mail, CheckCircle, Search, CreditCard, ExternalLink, RefreshCw, Shirt, ShoppingBag, Plus, Trash2, Sparkles, Tag } from 'lucide-react';
+import React from "react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  ChevronDown,
+  Menu,
+  X,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Mail,
+  CheckCircle,
+  Search,
+  CreditCard,
+  ExternalLink,
+  RefreshCw,
+  Shirt,
+  ShoppingBag,
+  Plus,
+  Trash2,
+  Sparkles,
+  Tag,
+} from "lucide-react";
 
-type ViewState = 'landing' | 'signup' | 'signin' | 'onboarding' | 'verification' | 'scanning' | 'review' | 'dashboard' | 'budget' | 'wardrobe';
+// ── Backend URL ───────────────────────────────────────────────────────────────
+// Change this one string if your backend moves (e.g. to a Render deployment URL)
+const API = "http://localhost:8000";
 
-type ClothingCategory = 'All' | 'Tops' | 'Bottoms' | 'Dresses' | 'Outerwear' | 'Footwear' | 'Swimwear' | 'Undergarments' | 'Accessories';
+type ViewState =
+  | "landing"
+  | "signup"
+  | "signin"
+  | "onboarding"
+  | "verification"
+  | "scanning"
+  | "review"
+  | "dashboard"
+  | "budget"
+  | "wardrobe";
+
+type ClothingCategory =
+  | "All"
+  | "Tops"
+  | "Bottoms"
+  | "Dresses"
+  | "Outerwear"
+  | "Footwear"
+  | "Swimwear"
+  | "Undergarments"
+  | "Accessories";
 
 interface WardrobeItem {
   id: number;
@@ -20,186 +63,565 @@ interface Outfit {
   items: WardrobeItem[];
 }
 
+// ── FilterSection accordion component ────────────────────────────────────────
+function FilterSection({
+  title,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-zinc-100 rounded-xl overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex justify-between items-center px-3 py-2.5 text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors"
+      >
+        {title}
+        <ChevronDown
+          size={14}
+          className={`transition-transform text-zinc-400 ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {isOpen && <div className="px-3 pb-3">{children}</div>}
+    </div>
+  );
+}
+
 export default function App() {
-  const [view, setView] = React.useState<ViewState>('landing');
+  const [view, setView] = React.useState<ViewState>("landing");
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [carouselIndex, setCarouselIndex] = React.useState(0);
 
   // User & App State
-  const [user, setUser] = React.useState({ firstName: '', lastName: '', email: '' });
+  const [user, setUser] = React.useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+  });
   const [isVerified, setIsVerified] = React.useState(false);
   const [scannedCount, setScannedCount] = React.useState(0);
   const [isScanning, setIsScanning] = React.useState(false);
   const [budget, setBudget] = React.useState<number | null>(null);
-  const [historicalSpend, setHistoricalSpend] = React.useState(1240.50);
+  const [historicalSpend, setHistoricalSpend] = React.useState(1240.5);
+
+  // ── Backend connection state ──────────────────────────────────────────────
+  // userId: UUID assigned by backend after Gmail OAuth. Persisted in localStorage.
+  // Sent as X-User-Id header on every fetch() call.
+  const [userId, setUserId] = React.useState<string>(
+    () => localStorage.getItem("wardrobeUserId") || ""
+  );
+  // manualPrice: typed by user for items where price_missing=true (e.g. SHEIN)
+  const [manualPrice, setManualPrice] = React.useState<string>("");
+  const apiHeaders = () => ({
+    "Content-Type": "application/json",
+    "X-User-Id": userId,
+  });
 
   // Wardrobe State
   const [wardrobeItems, setWardrobeItems] = React.useState<WardrobeItem[]>([
-    { id: 10, name: "White Oxford Shirt", price: 75, image: "https://images.unsplash.com/photo-1598033129183-c4f50c7176c8?auto=format&fit=crop&q=80&w=800", category: "Tops" },
-    { id: 11, name: "Slim Chinos", price: 65, image: "https://images.unsplash.com/photo-1473963456416-d17a72e078c8?auto=format&fit=crop&q=80&w=800", category: "Bottoms" },
-    { id: 12, name: "Leather Chelsea Boots", price: 150, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800", category: "Footwear" },
-    { id: 13, name: "Wool Overcoat", price: 220, image: "https://images.unsplash.com/photo-1539533397308-a61e4e7c9a44?auto=format&fit=crop&q=80&w=800", category: "Outerwear" },
-    { id: 14, name: "Knit Sweater", price: 95, image: "https://images.unsplash.com/photo-1556906781-9a412961c28c?auto=format&fit=crop&q=80&w=800", category: "Tops" },
-    { id: 15, name: "Cotton Beanie", price: 25, image: "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?auto=format&fit=crop&q=80&w=800", category: "Accessories" },
-    { id: 16, name: "Linen Shirt", price: 55, image: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800", category: "Tops" },
-    { id: 17, name: "Canvas Sneakers", price: 45, image: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&q=80&w=800", category: "Footwear" },
-    { id: 18, name: "Leather Belt", price: 40, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=800", category: "Accessories" },
+    {
+      id: 10,
+      name: "White Oxford Shirt",
+      price: 75,
+      image:
+        "https://images.unsplash.com/photo-1598033129183-c4f50c7176c8?auto=format&fit=crop&q=80&w=800",
+      category: "Tops",
+    },
+    {
+      id: 11,
+      name: "Slim Chinos",
+      price: 65,
+      image:
+        "https://images.unsplash.com/photo-1473963456416-d17a72e078c8?auto=format&fit=crop&q=80&w=800",
+      category: "Bottoms",
+    },
+    {
+      id: 12,
+      name: "Leather Chelsea Boots",
+      price: 150,
+      image:
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800",
+      category: "Footwear",
+    },
+    {
+      id: 13,
+      name: "Wool Overcoat",
+      price: 220,
+      image:
+        "https://images.unsplash.com/photo-1539533397308-a61e4e7c9a44?auto=format&fit=crop&q=80&w=800",
+      category: "Outerwear",
+    },
+    {
+      id: 14,
+      name: "Knit Sweater",
+      price: 95,
+      image:
+        "https://images.unsplash.com/photo-1556906781-9a412961c28c?auto=format&fit=crop&q=80&w=800",
+      category: "Tops",
+    },
+    {
+      id: 15,
+      name: "Cotton Beanie",
+      price: 25,
+      image:
+        "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?auto=format&fit=crop&q=80&w=800",
+      category: "Accessories",
+    },
+    {
+      id: 16,
+      name: "Linen Shirt",
+      price: 55,
+      image:
+        "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800",
+      category: "Tops",
+    },
+    {
+      id: 17,
+      name: "Canvas Sneakers",
+      price: 45,
+      image:
+        "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&q=80&w=800",
+      category: "Footwear",
+    },
+    {
+      id: 18,
+      name: "Leather Belt",
+      price: 40,
+      image:
+        "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=800",
+      category: "Accessories",
+    },
   ]);
-  const [activeCategory, setActiveCategory] = React.useState<ClothingCategory>('All');
-  const [wardrobeSearch, setWardrobeSearch] = React.useState('');
+  const [activeCategory, setActiveCategory] =
+    React.useState<ClothingCategory>("All");
+  const [wardrobeSearch, setWardrobeSearch] = React.useState("");
   const [filterOpen, setFilterOpen] = React.useState(false);
-  
+  const [openSection, setOpenSection] = React.useState<string | null>(null);
+
   // Outfit Builder State
   const [outfits, setOutfits] = React.useState<Outfit[]>([
     { id: 1, name: "Smart Casual Monday", items: [] },
   ]);
-  const [activeOutfitId, setActiveOutfitId] = React.useState<number | null>(null);
+  const [activeOutfitId, setActiveOutfitId] = React.useState<number | null>(
+    null
+  );
   const [isCreatingOutfit, setIsCreatingOutfit] = React.useState(false);
-  const [newOutfitName, setNewOutfitName] = React.useState('');
+  const [newOutfitName, setNewOutfitName] = React.useState("");
   const [outfitBuilderOpen, setOutfitBuilderOpen] = React.useState(false);
 
   // Tinder Swipe State
   const [itemsToReview, setItemsToReview] = React.useState([
-    { id: 1, name: "Vintage Denim Jacket", price: 85, image: "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?auto=format&fit=crop&q=80&w=800", isClothing: true, category: "Outerwear" as ClothingCategory },
-    { id: 2, name: "Organic Coffee Beans", price: 18, image: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?auto=format&fit=crop&q=80&w=800", isClothing: false, category: "Accessories" as ClothingCategory },
-    { id: 3, name: "Minimalist Leather Boots", price: 160, image: "https://images.unsplash.com/photo-1520639888713-7851133b1ed0?auto=format&fit=crop&q=80&w=800", isClothing: true, category: "Footwear" as ClothingCategory },
-    { id: 4, name: "Smart LED Bulb", price: 25, image: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=800", isClothing: false, category: "Accessories" as ClothingCategory },
-    { id: 5, name: "Graphic Cotton Tee", price: 32, image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800", isClothing: true, category: "Tops" as ClothingCategory },
+    {
+      id: 1,
+      name: "Vintage Denim Jacket",
+      price: 85,
+      image:
+        "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?auto=format&fit=crop&q=80&w=800",
+      isClothing: true,
+      category: "Outerwear" as ClothingCategory,
+    },
+    {
+      id: 2,
+      name: "Organic Coffee Beans",
+      price: 18,
+      image:
+        "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?auto=format&fit=crop&q=80&w=800",
+      isClothing: false,
+      category: "Accessories" as ClothingCategory,
+    },
+    {
+      id: 3,
+      name: "Minimalist Leather Boots",
+      price: 160,
+      image:
+        "https://images.unsplash.com/photo-1520639888713-7851133b1ed0?auto=format&fit=crop&q=80&w=800",
+      isClothing: true,
+      category: "Footwear" as ClothingCategory,
+    },
+    {
+      id: 4,
+      name: "Smart LED Bulb",
+      price: 25,
+      image:
+        "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=800",
+      isClothing: false,
+      category: "Accessories" as ClothingCategory,
+    },
+    {
+      id: 5,
+      name: "Graphic Cotton Tee",
+      price: 32,
+      image:
+        "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800",
+      isClothing: true,
+      category: "Tops" as ClothingCategory,
+    },
   ]);
   const [reviewIndex, setReviewIndex] = React.useState(0);
-  const [swipeDirection, setSwipeDirection] = React.useState<'left' | 'right' | null>(null);
+  const [swipeDirection, setSwipeDirection] = React.useState<
+    "left" | "right" | null
+  >(null);
   const [showSwipeTip, setShowSwipeTip] = React.useState(true);
 
   // Recommendations Mock Data
   const recommendations = [
-    { id: 101, name: "Slim Fit Chinos", price: 65, image: "https://images.unsplash.com/photo-1473963456416-d17a72e078c8?auto=format&fit=crop&q=80&w=800", link: "#", source: "Uniqlo" },
-    { id: 102, name: "Linen Button Down", price: 55, image: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800", link: "#", source: "Everlane" },
-    { id: 103, name: "Canvas Sneakers", price: 45, image: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&q=80&w=800", link: "#", source: "Converse" },
-    { id: 104, name: "Wool Overcoat", price: 220, image: "https://images.unsplash.com/photo-1539533397308-a61e4e7c9a44?auto=format&fit=crop&q=80&w=800", link: "#", source: "Nordstrom" },
-    { id: 105, name: "Denim Jacket", price: 89, image: "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?auto=format&fit=crop&q=80&w=800", link: "#", source: "Levi's" },
-    { id: 106, name: "Leather Belt", price: 40, image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=800", link: "#", source: "Fossil" },
-    { id: 107, name: "Cotton Beanie", price: 25, image: "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?auto=format&fit=crop&q=80&w=800", link: "#", source: "Carhartt" },
-    { id: 108, name: "Oxford Shirt", price: 75, image: "https://images.unsplash.com/photo-1598033129183-c4f50c7176c8?auto=format&fit=crop&q=80&w=800", link: "#", source: "J.Crew" },
-    { id: 109, name: "Chelsea Boots", price: 150, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800", link: "#", source: "Dr. Martens" },
-    { id: 110, name: "Knit Sweater", price: 95, image: "https://images.unsplash.com/photo-1556906781-9a412961c28c?auto=format&fit=crop&q=80&w=800", link: "#", source: "Patagonia" },
+    {
+      id: 101,
+      name: "Slim Fit Chinos",
+      price: 65,
+      image:
+        "https://images.unsplash.com/photo-1473963456416-d17a72e078c8?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Uniqlo",
+    },
+    {
+      id: 102,
+      name: "Linen Button Down",
+      price: 55,
+      image:
+        "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Everlane",
+    },
+    {
+      id: 103,
+      name: "Canvas Sneakers",
+      price: 45,
+      image:
+        "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Converse",
+    },
+    {
+      id: 104,
+      name: "Wool Overcoat",
+      price: 220,
+      image:
+        "https://images.unsplash.com/photo-1539533397308-a61e4e7c9a44?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Nordstrom",
+    },
+    {
+      id: 105,
+      name: "Denim Jacket",
+      price: 89,
+      image:
+        "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Levi's",
+    },
+    {
+      id: 106,
+      name: "Leather Belt",
+      price: 40,
+      image:
+        "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Fossil",
+    },
+    {
+      id: 107,
+      name: "Cotton Beanie",
+      price: 25,
+      image:
+        "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Carhartt",
+    },
+    {
+      id: 108,
+      name: "Oxford Shirt",
+      price: 75,
+      image:
+        "https://images.unsplash.com/photo-1598033129183-c4f50c7176c8?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "J.Crew",
+    },
+    {
+      id: 109,
+      name: "Chelsea Boots",
+      price: 150,
+      image:
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Dr. Martens",
+    },
+    {
+      id: 110,
+      name: "Knit Sweater",
+      price: 95,
+      image:
+        "https://images.unsplash.com/photo-1556906781-9a412961c28c?auto=format&fit=crop&q=80&w=800",
+      link: "#",
+      source: "Patagonia",
+    },
   ];
 
   const onboardingData = [
     {
       title: "Scan Your Digital Purchases",
-      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
-      description: "WardrobeSuite securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits."
+      image:
+        "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
+      description:
+        "WardrobeSuite securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits.",
     },
     {
       title: "Set a Budget and Style Preferences",
-      image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800",
-      description: "Customize your experience by setting a monthly clothing budget and selecting your style preferences. WardrobeSuite learns from your choices to provide personalized recommendations."
+      image:
+        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800",
+      description:
+        "Customize your experience by setting a monthly clothing budget and selecting your style preferences. WardrobeSuite learns from your choices to provide personalized recommendations.",
     },
     {
       title: "Advanced Security",
-      image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800",
-      description: "Rest easy knowing your data is protected by enterprise-grade encryption and protocols."
+      image:
+        "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800",
+      description:
+        "Rest easy knowing your data is protected by enterprise-grade encryption and protocols.",
     },
     {
       title: "Scalable Infrastructure",
-      image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800",
-      description: "Our platform grows with you, handling everything from your first user to your first million."
-    }
+      image:
+        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800",
+      description:
+        "Our platform grows with you, handling everything from your first user to your first million.",
+    },
   ];
 
-  const categories: ClothingCategory[] = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Swimwear', 'Undergarments', 'Accessories'];
+  const categories: ClothingCategory[] = [
+    "All",
+    "Tops",
+    "Bottoms",
+    "Dresses",
+    "Outerwear",
+    "Footwear",
+    "Swimwear",
+    "Undergarments",
+    "Accessories",
+  ];
 
   const categoryIcons: Record<string, string> = {
-    'All': '👕', 'Tops': '👕', 'Bottoms': '👖', 'Dresses': '👗',
-    'Outerwear': '🧥', 'Footwear': '👟', 'Swimwear': '🩱',
-    'Undergarments': '🩲', 'Accessories': '🧢'
+    All: "👕",
+    Tops: "👕",
+    Bottoms: "👖",
+    Dresses: "👗",
+    Outerwear: "🧥",
+    Footwear: "👟",
+    Swimwear: "🩱",
+    Undergarments: "🩲",
+    Accessories: "🧢",
   };
 
-  const filteredWardrobe = wardrobeItems.filter(item => {
-    const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(wardrobeSearch.toLowerCase());
+  const filteredWardrobe = wardrobeItems.filter((item) => {
+    const matchesCategory =
+      activeCategory === "All" || item.category === activeCategory;
+    const matchesSearch = item.name
+      .toLowerCase()
+      .includes(wardrobeSearch.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const activeOutfit = outfits.find(o => o.id === activeOutfitId) || null;
+  const activeOutfit = outfits.find((o) => o.id === activeOutfitId) || null;
 
   const addItemToOutfit = (item: WardrobeItem) => {
     if (!activeOutfitId) return;
-    setOutfits(prev => prev.map(outfit => {
-      if (outfit.id !== activeOutfitId) return outfit;
-      if (outfit.items.find(i => i.id === item.id)) return outfit; // prevent duplicates
-      return { ...outfit, items: [...outfit.items, item] };
-    }));
+    setOutfits((prev) =>
+      prev.map((outfit) => {
+        if (outfit.id !== activeOutfitId) return outfit;
+        if (outfit.items.find((i) => i.id === item.id)) return outfit; // prevent duplicates
+        return { ...outfit, items: [...outfit.items, item] };
+      })
+    );
   };
 
   const removeItemFromOutfit = (outfitId: number, itemId: number) => {
-    setOutfits(prev => prev.map(outfit => {
-      if (outfit.id !== outfitId) return outfit;
-      return { ...outfit, items: outfit.items.filter(i => i.id !== itemId) };
-    }));
+    setOutfits((prev) =>
+      prev.map((outfit) => {
+        if (outfit.id !== outfitId) return outfit;
+        return {
+          ...outfit,
+          items: outfit.items.filter((i) => i.id !== itemId),
+        };
+      })
+    );
   };
 
   const createOutfit = () => {
     if (!newOutfitName.trim()) return;
-    const newOutfit: Outfit = { id: Date.now(), name: newOutfitName.trim(), items: [] };
-    setOutfits(prev => [...prev, newOutfit]);
+    const newOutfit: Outfit = {
+      id: Date.now(),
+      name: newOutfitName.trim(),
+      items: [],
+    };
+    setOutfits((prev) => [...prev, newOutfit]);
     setActiveOutfitId(newOutfit.id);
-    setNewOutfitName('');
+    setNewOutfitName("");
     setIsCreatingOutfit(false);
     setOutfitBuilderOpen(true);
   };
 
   const deleteOutfit = (id: number) => {
-    setOutfits(prev => prev.filter(o => o.id !== id));
+    setOutfits((prev) => prev.filter((o) => o.id !== id));
     if (activeOutfitId === id) setActiveOutfitId(null);
   };
 
-  const nextSlide = () => setCarouselIndex((prev) => (prev + 1) % onboardingData.length);
-  const prevSlide = () => setCarouselIndex((prev) => (prev - 1 + onboardingData.length) % onboardingData.length);
+  const nextSlide = () =>
+    setCarouselIndex((prev) => (prev + 1) % onboardingData.length);
+  const prevSlide = () =>
+    setCarouselIndex(
+      (prev) => (prev - 1 + onboardingData.length) % onboardingData.length
+    );
 
-  const startScanning = () => {
-    setView('scanning');
+  const startScanning = async (uid?: string) => {
+    // uid only needed on very first login — React state for userId hasn't
+    // updated yet when this is called right after setUserId()
+    const effectiveId = uid || userId;
+    setView("scanning");
     setIsScanning(true);
-    let count = 0;
-    const interval = setInterval(() => {
-      count += Math.floor(Math.random() * 3) + 1;
-      setScannedCount(count);
-      if (count >= 42) {
-        clearInterval(interval);
-        setIsScanning(false);
-      }
-    }, 200);
+    setScannedCount(0);
+
+    try {
+      // POST /scan/initial → backend fetches Gmail, runs Gemini, queues items
+      const res = await fetch(`${API}/scan/initial`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": effectiveId,
+        },
+        body: JSON.stringify({ initial_scan_days: 90 }),
+      });
+      const data = await res.json();
+      // Show the real count Gemini actually found — not a fake random number
+      setScannedCount(data.queued_count ?? 0);
+    } catch {
+      setScannedCount(0); // backend unreachable — show 0, user can still proceed
+    } finally {
+      setIsScanning(false);
+    }
+
+    // Pre-load review queue so cards are ready when user clicks "Begin Reviewing"
+    try {
+      const res = await fetch(`${API}/review-items`, {
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": effectiveId,
+        },
+      });
+      const items = await res.json();
+      setItemsToReview(items); // replaces the 5 hardcoded fake items
+      setReviewIndex(0);
+    } catch {
+      /* keep existing state */
+    }
   };
 
-  const handleSwipe = (direction: 'left' | 'right') => {
+  const handleSwipe = async (direction: "left" | "right") => {
     setSwipeDirection(direction);
     const currentItem = itemsToReview[reviewIndex];
-    if (direction === 'right' && currentItem.isClothing) {
-      // Save to wardrobe
-      setWardrobeItems(prev => {
-        if (prev.find(i => i.id === currentItem.id)) return prev;
-        return [...prev, {
-          id: currentItem.id,
-          name: currentItem.name,
-          price: currentItem.price,
-          image: currentItem.image,
-          category: currentItem.category,
-        }];
-      });
+    if (!currentItem) return;
+
+    if (direction === "right") {
+      // POST /review-items/{id}/approve
+      // Only send edited_price_cents if user typed a manual price
+      const body: Record<string, any> = {};
+      if ((currentItem as any).price_missing && manualPrice) {
+        body.edited_price_cents = Math.round(parseFloat(manualPrice) * 100);
+      }
+      try {
+        const res = await fetch(
+          `${API}/review-items/${currentItem.id}/approve`,
+          {
+            method: "POST",
+            headers: apiHeaders(),
+            body: JSON.stringify(body),
+          }
+        );
+        if (res.ok) {
+          const approved = await res.json();
+          // Add to local wardrobe immediately so dashboard count updates
+          setWardrobeItems((prev) => {
+            if (prev.find((i) => i.id === approved.wardrobe_item_id))
+              return prev;
+            return [
+              ...prev,
+              {
+                id: approved.wardrobe_item_id,
+                name: approved.item_name,
+                price: (approved.price_cents ?? 0) / 100,
+                image:
+                  (currentItem as any).image_url ||
+                  currentItem.image ||
+                  "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
+                category:
+                  (approved.category as ClothingCategory) || "Accessories",
+              },
+            ];
+          });
+        }
+      } catch {
+        /* skip on error, still advance */
+      }
+    } else {
+      // POST /review-items/{id}/reject — marks item as rejected in DB
+      try {
+        await fetch(`${API}/review-items/${currentItem.id}/reject`, {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({}),
+        });
+      } catch {
+        /* still advance even if this fails */
+      }
     }
+
+    setManualPrice("");
     setTimeout(() => {
       if (reviewIndex < itemsToReview.length - 1) {
-        setReviewIndex(prev => prev + 1);
+        setReviewIndex((prev) => prev + 1);
         setSwipeDirection(null);
       } else {
-        setView('dashboard');
+        setView("dashboard");
       }
     }, 200);
   };
 
+  // ── Load real wardrobe items from backend when dashboard view opens ──────
+  // Runs whenever view changes. Only fetches when on dashboard and userId exists.
+  // Replaces the 9 hardcoded placeholder items with real approved wardrobe items.
+  React.useEffect(() => {
+    if (view !== "dashboard" || !userId) return;
+    fetch(`${API}/items`, { headers: apiHeaders() })
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        const mapped = data.map((item) => ({
+          id: item.id,
+          name: item.item_name,
+          price: (item.price_cents ?? 0) / 100,
+          image:
+            item.image_url ||
+            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
+          category: (item.category as ClothingCategory) || "Accessories",
+        }));
+        setWardrobeItems(mapped);
+      })
+      .catch(() => {});
+  }, [view, userId]);
+
   const [recommendationIndex, setRecommendationIndex] = React.useState(0);
-  const nextRec = () => setRecommendationIndex((prev) => (prev + 1) % (recommendations.length - 4));
-  const prevRec = () => setRecommendationIndex((prev) => (prev - 1 + (recommendations.length - 4)) % (recommendations.length - 4));
+  const nextRec = () =>
+    setRecommendationIndex((prev) => (prev + 1) % (recommendations.length - 4));
+  const prevRec = () =>
+    setRecommendationIndex(
+      (prev) =>
+        (prev - 1 + (recommendations.length - 4)) % (recommendations.length - 4)
+    );
 
   return (
     <div className="min-h-screen font-sans bg-white flex flex-col">
@@ -209,7 +631,11 @@ export default function App() {
           <motion.div
             layout
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className={`flex items-center gap-2 absolute ${["landing", "dashboard", "budget", "wardrobe"].includes(view) ? "left-6" : "left-1/2 -translate-x-1/2"}`}
+            className={`flex items-center gap-2 absolute ${
+              ["landing", "dashboard", "budget", "wardrobe"].includes(view)
+                ? "left-6"
+                : "left-1/2 -translate-x-1/2"
+            }`}
           >
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl font-display">
               W
@@ -259,20 +685,32 @@ export default function App() {
               >
                 <button
                   onClick={() => setView("wardrobe")}
-                  className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${view === "wardrobe" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
+                  className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                    view === "wardrobe"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
                 >
                   <Shirt size={14} />
                   Wardrobe
                 </button>
                 <button
                   onClick={() => setView("dashboard")}
-                  className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${view === "dashboard" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
+                  className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
+                    view === "dashboard"
+                      ? "bg-zinc-900 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
                 >
                   Dashboard
                 </button>
                 <button
                   onClick={() => setView("profile")}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${view === "profile" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    view === "profile"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
                 >
                   <User size={16} />
                 </button>
@@ -674,7 +1112,11 @@ export default function App() {
                           {onboardingData.map((_, i) => (
                             <div
                               key={i}
-                              className={`h-1 rounded-full transition-all duration-300 ${i === carouselIndex ? "w-5 bg-indigo-600" : "w-1 bg-zinc-200"}`}
+                              className={`h-1 rounded-full transition-all duration-300 ${
+                                i === carouselIndex
+                                  ? "w-5 bg-indigo-600"
+                                  : "w-1 bg-zinc-200"
+                              }`}
                             />
                           ))}
                         </div>
@@ -819,7 +1261,11 @@ export default function App() {
                 <button
                   disabled={isScanning}
                   onClick={() => setView("review")}
-                  className={`w-full py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm ${isScanning ? "bg-zinc-100 text-zinc-400 cursor-not-allowed" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200"}`}
+                  className={`w-full py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm ${
+                    isScanning
+                      ? "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                  }`}
                 >
                   Begin Reviewing <ArrowRight size={18} />
                 </button>
@@ -1065,7 +1511,9 @@ export default function App() {
                   <div className="relative flex-1 overflow-hidden">
                     <motion.div
                       animate={{
-                        x: `calc(-${recommendationIndex * 20}% - ${recommendationIndex * 3.2}px)`,
+                        x: `calc(-${recommendationIndex * 20}% - ${
+                          recommendationIndex * 3.2
+                        }px)`,
                       }}
                       transition={{
                         type: "spring",
@@ -1140,7 +1588,11 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => setOutfitBuilderOpen((o) => !o)}
-                  className={`px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${outfitBuilderOpen ? "bg-violet-600 text-white shadow-lg shadow-violet-200" : "bg-zinc-900 text-white hover:bg-zinc-800"}`}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${
+                    outfitBuilderOpen
+                      ? "bg-violet-600 text-white shadow-lg shadow-violet-200"
+                      : "bg-zinc-900 text-white hover:bg-zinc-800"
+                  }`}
                 >
                   <Sparkles size={16} />
                   {outfitBuilderOpen
@@ -1151,7 +1603,9 @@ export default function App() {
 
               {/* Two-column layout when outfit builder is open */}
               <div
-                className={`flex gap-6 ${outfitBuilderOpen ? "flex-col lg:flex-row" : "flex-col"}`}
+                className={`flex gap-6 ${
+                  outfitBuilderOpen ? "flex-col lg:flex-row" : "flex-col"
+                }`}
               >
                 {/* LEFT: Wardrobe Items */}
                 <div
@@ -1174,156 +1628,229 @@ export default function App() {
                     </div>
 
                     <div className="relative">
-  <button
-    onClick={() => setFilterOpen(o => !o)}
-    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${activeCategory !== 'All' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-zinc-50 text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}
-  >
-    <Tag size={14} />
-    {activeCategory === 'All' ? 'Filter' : activeCategory}
-    <ChevronDown size={13} className={`transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
-  </button>
+                      <button
+                        onClick={() => setFilterOpen((o) => !o)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                          activeCategory !== "All"
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-zinc-50 text-zinc-600 border-zinc-100 hover:border-zinc-300"
+                        }`}
+                      >
+                        <Tag size={14} />
+                        {activeCategory === "All" ? "Filter" : activeCategory}
+                        <ChevronDown
+                          size={13}
+                          className={`transition-transform ${
+                            filterOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
 
-  <AnimatePresence>
-    {filterOpen && (
-      <>
-        {/* Mobile backdrop */}
-        <div
-          className="fixed inset-0 bg-black/20 z-30 md:hidden"
-          onClick={() => setFilterOpen(false)}
-        />
+                      <AnimatePresence>
+                        {filterOpen && (
+                          <>
+                            {/* Mobile backdrop */}
+                            <div
+                              className="fixed inset-0 bg-black/20 z-30 md:hidden"
+                              onClick={() => setFilterOpen(false)}
+                            />
 
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 8 }}
-          transition={{ duration: 0.2 }}
-          className="
+                            <motion.div
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 8 }}
+                              transition={{ duration: 0.2 }}
+                              className="
             fixed inset-x-0 bottom-0 z-40 bg-white rounded-t-3xl shadow-2xl p-5 max-h-[85vh] overflow-y-auto
             md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2
             md:w-72 md:rounded-2xl md:shadow-xl md:max-h-none md:overflow-visible
           "
-        >
-          {/* Mobile drag handle */}
-          <div className="w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5 md:hidden" />
+                            >
+                              {/* Mobile drag handle */}
+                              <div className="w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5 md:hidden" />
 
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-bold text-zinc-900">Filter Wardrobe</h3>
-            <button onClick={() => setFilterOpen(false)} className="text-zinc-400 hover:text-zinc-600">
-              <X size={16} />
-            </button>
-          </div>
+                              <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-sm font-bold text-zinc-900">
+                                  Filter Wardrobe
+                                </h3>
+                                <button
+                                  onClick={() => setFilterOpen(false)}
+                                  className="text-zinc-400 hover:text-zinc-600"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
 
-          <div className="space-y-2">
+                              <div className="space-y-2">
+                                {/* Category accordion */}
+                                <FilterSection
+                                  title="Category"
+                                  isOpen={openSection === "category"}
+                                  onToggle={() =>
+                                    setOpenSection((s) =>
+                                      s === "category" ? null : "category"
+                                    )
+                                  }
+                                >
+                                  <div className="space-y-0.5 pt-1">
+                                    {[
+                                      "All",
+                                      "Tops",
+                                      "Bottoms",
+                                      "Dresses",
+                                      "Outerwear",
+                                      "Footwear",
+                                      "Swimwear",
+                                      "Undergarments",
+                                      "Accessories",
+                                    ].map((cat) => (
+                                      <button
+                                        key={cat}
+                                        onClick={() =>
+                                          setActiveCategory(
+                                            cat as ClothingCategory
+                                          )
+                                        }
+                                        className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${
+                                          activeCategory === cat
+                                            ? "bg-indigo-50 text-indigo-600 font-bold"
+                                            : "text-zinc-600 hover:bg-zinc-50 font-medium"
+                                        }`}
+                                      >
+                                        {cat}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </FilterSection>
 
-            {/* Category accordion */}
-            <FilterSection title="Category" isOpen={openSection === 'category'} onToggle={() => setOpenSection(s => s === 'category' ? null : 'category')}>
-              <div className="space-y-0.5 pt-1">
-                {['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Swimwear', 'Undergarments', 'Accessories'].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat as ClothingCategory)}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${activeCategory === cat ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-zinc-600 hover:bg-zinc-50 font-medium'}`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </FilterSection>
+                                {/* Season accordion */}
+                                <FilterSection
+                                  title="Season"
+                                  isOpen={openSection === "season"}
+                                  onToggle={() =>
+                                    setOpenSection((s) =>
+                                      s === "season" ? null : "season"
+                                    )
+                                  }
+                                >
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {["Spring", "Summer", "Fall", "Winter"].map(
+                                      (s) => (
+                                        <button
+                                          key={s}
+                                          className="px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 border border-zinc-100 transition-colors"
+                                        >
+                                          {s}
+                                        </button>
+                                      )
+                                    )}
+                                  </div>
+                                </FilterSection>
 
-            {/* Season accordion */}
-            <FilterSection title="Season" isOpen={openSection === 'season'} onToggle={() => setOpenSection(s => s === 'season' ? null : 'season')}>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {['Spring', 'Summer', 'Fall', 'Winter'].map(s => (
-                  <button key={s} className="px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 border border-zinc-100 transition-colors">
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </FilterSection>
+                                {/* Sleeve Length accordion */}
+                                <FilterSection
+                                  title="Sleeve Length"
+                                  isOpen={openSection === "sleeve"}
+                                  onToggle={() =>
+                                    setOpenSection((s) =>
+                                      s === "sleeve" ? null : "sleeve"
+                                    )
+                                  }
+                                >
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {["Sleeveless", "Short", "3/4", "Long"].map(
+                                      (s) => (
+                                        <button
+                                          key={s}
+                                          className="px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 border border-zinc-100 transition-colors"
+                                        >
+                                          {s}
+                                        </button>
+                                      )
+                                    )}
+                                  </div>
+                                </FilterSection>
 
-            {/* Sleeve Length accordion */}
-            <FilterSection title="Sleeve Length" isOpen={openSection === 'sleeve'} onToggle={() => setOpenSection(s => s === 'sleeve' ? null : 'sleeve')}>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {['Sleeveless', 'Short', '3/4', 'Long'].map(s => (
-                  <button key={s} className="px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 border border-zinc-100 transition-colors">
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </FilterSection>
+                                {/* Color accordion */}
+                                <FilterSection
+                                  title="Color"
+                                  isOpen={openSection === "color"}
+                                  onToggle={() =>
+                                    setOpenSection((s) =>
+                                      s === "color" ? null : "color"
+                                    )
+                                  }
+                                >
+                                  <div className="flex flex-wrap gap-2.5 pt-2">
+                                    {[
+                                      { name: "Black", hex: "#18181b" },
+                                      { name: "White", hex: "#fafafa" },
+                                      { name: "Navy", hex: "#1e3a5f" },
+                                      { name: "Gray", hex: "#71717a" },
+                                      { name: "Brown", hex: "#92400e" },
+                                      { name: "Green", hex: "#16a34a" },
+                                      { name: "Red", hex: "#dc2626" },
+                                      { name: "Blue", hex: "#2563eb" },
+                                      { name: "Pink", hex: "#ec4899" },
+                                      { name: "Yellow", hex: "#eab308" },
+                                    ].map((c) => (
+                                      <button
+                                        key={c.name}
+                                        title={c.name}
+                                        className="w-7 h-7 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform ring-1 ring-zinc-200"
+                                        style={{ backgroundColor: c.hex }}
+                                      />
+                                    ))}
+                                  </div>
+                                </FilterSection>
 
-            {/* Color accordion */}
-            <FilterSection title="Color" isOpen={openSection === 'color'} onToggle={() => setOpenSection(s => s === 'color' ? null : 'color')}>
-              <div className="flex flex-wrap gap-2.5 pt-2">
-                {[
-                  { name: 'Black', hex: '#18181b' },
-                  { name: 'White', hex: '#fafafa' },
-                  { name: 'Navy', hex: '#1e3a5f' },
-                  { name: 'Gray', hex: '#71717a' },
-                  { name: 'Brown', hex: '#92400e' },
-                  { name: 'Green', hex: '#16a34a' },
-                  { name: 'Red', hex: '#dc2626' },
-                  { name: 'Blue', hex: '#2563eb' },
-                  { name: 'Pink', hex: '#ec4899' },
-                  { name: 'Yellow', hex: '#eab308' },
-                ].map(c => (
-                  <button key={c.name} title={c.name} className="w-7 h-7 rounded-full border-2 border-white shadow-sm hover:scale-110 transition-transform ring-1 ring-zinc-200" style={{ backgroundColor: c.hex }} />
-                ))}
-              </div>
-            </FilterSection>
+                                {/* Fit accordion */}
+                                <FilterSection
+                                  title="Fit"
+                                  isOpen={openSection === "fit"}
+                                  onToggle={() =>
+                                    setOpenSection((s) =>
+                                      s === "fit" ? null : "fit"
+                                    )
+                                  }
+                                >
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {[
+                                      "Slim",
+                                      "Regular",
+                                      "Relaxed",
+                                      "Oversized",
+                                    ].map((f) => (
+                                      <button
+                                        key={f}
+                                        className="px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 border border-zinc-100 transition-colors"
+                                      >
+                                        {f}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </FilterSection>
+                              </div>
 
-            {/* Fit accordion */}
-            <FilterSection title="Fit" isOpen={openSection === 'fit'} onToggle={() => setOpenSection(s => s === 'fit' ? null : 'fit')}>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {['Slim', 'Regular', 'Relaxed', 'Oversized'].map(f => (
-                  <button key={f} className="px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-50 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 border border-zinc-100 transition-colors">
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </FilterSection>
-
-          </div>
-
-          <div className="mt-5 pt-4 border-t border-zinc-100 flex justify-between items-center">
-            <button
-              onClick={() => { setActiveCategory('All'); setFilterOpen(false); }}
-              className="text-xs font-bold text-zinc-400 hover:text-red-500 transition-colors"
-            >
-              Clear all
-            </button>
-            <button
-              onClick={() => setFilterOpen(false)}
-              className="px-5 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-all"
-            >
-              Apply
-            </button>
-          </div>
-        </motion.div>
-      </>
-    )}
-  </AnimatePresence>
-</div>
-
-                            {/* Footer */}
-                            <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-between items-center">
-                              <button
-                                onClick={() => {
-                                  setActiveCategory("All");
-                                  setFilterOpen(false);
-                                }}
-                                className="text-xs font-bold text-zinc-400 hover:text-red-500 transition-colors"
-                              >
-                                Clear all
-                              </button>
-                              <button
-                                onClick={() => setFilterOpen(false)}
-                                className="px-4 py-1.5 bg-zinc-900 text-white rounded-lg text-xs font-bold hover:bg-zinc-800 transition-all"
-                              >
-                                Apply
-                              </button>
-                            </div>
-                          </motion.div>
+                              <div className="mt-5 pt-4 border-t border-zinc-100 flex justify-between items-center">
+                                <button
+                                  onClick={() => {
+                                    setActiveCategory("All");
+                                    setFilterOpen(false);
+                                  }}
+                                  className="text-xs font-bold text-zinc-400 hover:text-red-500 transition-colors"
+                                >
+                                  Clear all
+                                </button>
+                                <button
+                                  onClick={() => setFilterOpen(false)}
+                                  className="px-5 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-all"
+                                >
+                                  Apply
+                                </button>
+                              </div>
+                            </motion.div>
+                          </>
                         )}
                       </AnimatePresence>
                     </div>
@@ -1421,10 +1948,14 @@ export default function App() {
                                 setActiveOutfitId(
                                   outfit.id === activeOutfitId
                                     ? null
-                                    : outfit.id,
+                                    : outfit.id
                                 )
                               }
-                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${activeOutfitId === outfit.id ? "bg-violet-600 text-white" : "bg-white border border-zinc-200 text-zinc-600 hover:border-violet-300"}`}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                activeOutfitId === outfit.id
+                                  ? "bg-violet-600 text-white"
+                                  : "bg-white border border-zinc-200 text-zinc-600 hover:border-violet-300"
+                              }`}
                             >
                               {outfit.name}
                               <button
@@ -1432,7 +1963,11 @@ export default function App() {
                                   e.stopPropagation();
                                   deleteOutfit(outfit.id);
                                 }}
-                                className={`opacity-60 hover:opacity-100 transition-opacity ${activeOutfitId === outfit.id ? "text-violet-200 hover:text-white" : "text-zinc-400 hover:text-red-500"}`}
+                                className={`opacity-60 hover:opacity-100 transition-opacity ${
+                                  activeOutfitId === outfit.id
+                                    ? "text-violet-200 hover:text-white"
+                                    : "text-zinc-400 hover:text-red-500"
+                                }`}
                               >
                                 <X size={10} />
                               </button>
@@ -1534,7 +2069,7 @@ export default function App() {
                                       onClick={() =>
                                         removeItemFromOutfit(
                                           activeOutfit.id,
-                                          item.id,
+                                          item.id
                                         )
                                       }
                                       className="opacity-0 group-hover:opacity-100 text-zinc-300 hover:text-red-500 transition-all"
@@ -1553,7 +2088,7 @@ export default function App() {
                                     $
                                     {activeOutfit.items.reduce(
                                       (sum, i) => sum + i.price,
-                                      0,
+                                      0
                                     )}
                                   </span>
                                 </div>

@@ -11,9 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-MODEL_ID = "gemini-3.1-pro-preview"
-
+MODEL_ID = "gemini-2.0-flash"
 CONFIDENCE_THRESHOLD = 0.65
 
 class Category(str, Enum):
@@ -26,60 +24,67 @@ class Category(str, Enum):
 
 
 class ExtractedItem(BaseModel):
-    item_name: str
-    price: Optional[float] = None
+    item_name: str 
+    price: Optional[float] = None 
     purchased_at: Optional[str] = None
-    image_url: Optional[str] = None
+    image_url: Optional[str] = None 
     category_guess: Optional[Category] = None
+    size: Optional[str] = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     is_clothing: bool = False
 
 
 class ExtractedEmail(BaseModel):
-    # Store or brand name, e.g. "SHEIN", "Quince", "ASOS"
     merchant: Optional[str] = None
-    # All clothing items found in this email (may be empty list)
     items: list[ExtractedItem] = []
 
 
-# ── System prompt ─────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are a receipt parser that extracts clothing purchase information from order confirmation emails.
 
 Rules you must follow:
 
 item_name:
 - Maximum 60 characters
-- Remove all marketing taglines, size info, and comma-separated SEO keywords
-- BAD: "HoloChill Women's Casual Solid Color Waist Tie Bow Pullover Long Sleeve Sweater, New Arrival, Suitable For New Year Casual Wear, Teacher Outfits"
+- Remove all marketing taglines, size info from the name itself, and SEO keyword spam
+- BAD: "HoloChill Women's Casual Solid Color Waist Tie Bow Pullover Long Sleeve Sweater, New Arrival, Suitable For New Year Casual Wear"
 - GOOD: "HoloChill Waist Tie Pullover Sweater"
-- BAD: "SHEIN PETITE Solid Button Front Vest Blazer & Skirt Suit Set For Summer Business Women Clothes Sexy Office Siren Women Two Pieces Sets Old Money Style"
+- BAD: "SHEIN PETITE Solid Button Front Vest Blazer & Skirt Suit Set For Summer Business Women Clothes Sexy Office Siren Women Two Pieces Sets"
 - GOOD: "SHEIN PETITE Button Front Blazer & Skirt Set"
+
+size:
+- Extract the size of each item as a short string
+- Letter sizes: "XS", "S", "M", "L", "XL", "XXL", "3XL"
+- Numeric sizes (pants): "28", "30", "32x30", "32x32"
+- Shoe sizes: "7", "8.5", "9", "10", "11"
+- Dress/jean sizes: "0", "2", "4", "6", "8", "10"
+- Plus sizes: "1X", "2X", "3X"
+- If an item appears multiple times with different sizes (e.g. same shirt in S and M), create one entry per size
+- Set null if no size is mentioned for this specific item in the email
 
 is_clothing:
 - TRUE for: clothing, shoes, bags, jewelry, belts, hats, scarves, sunglasses, socks, underwear, swimwear, activewear
 - FALSE for: hair clips, hair extensions, art supplies, electronics, home goods, food, gift cards, candles, phone cases
 
 price:
-- Use prices from the pre-extracted prices list provided in the prompt
-- Match each item to its most likely price based on context
-- Do NOT invent prices that are not in the pre-extracted list
-- Set null if you cannot confidently match an item to a price
+- Use prices from the pre-extracted prices list provided
+- Match each item to its most likely price
+- Do NOT invent prices not in the pre-extracted list
+- Set null if you cannot confidently match
 
 image_url:
-- Use URLs from the pre-extracted image list provided in the prompt
+- Use URLs from the pre-extracted image list
 - Assign the most relevant URL to each item
 - If unsure, assign in order (first image to first item, etc.)
-- Set null if no images were provided
+- Set null if no images provided
 
 confidence:
 - 0.9-1.0: clear receipt with item name and price both visible
 - 0.7-0.89: order confirmation but price or details unclear
 - 0.5-0.69: email mentions clothing but might be marketing not a receipt
-- below 0.5: very uncertain — probably not a real purchase
+- below 0.5: very uncertain
 
 purchased_at:
-- The ORDER date shown in the email, as YYYY-MM-DD
-- Not the shipping or delivery date
+- The ORDER date as YYYY-MM-DD, not shipping or delivery date
 - Set null if not found
 
 If no clothing items are found, return an empty items list."""
@@ -93,22 +98,10 @@ def extract_purchases_from_email(
     image_urls: list[str] = None,
 ) -> Optional[ExtractedEmail]:
     """
-    Calls Gemini to extract clothing purchases from an email.
+    Calls Gemini with response_schema to guarantee valid JSON matching ExtractedEmail.
+    The API validates before returning — malformed/truncated JSON is impossible.
 
-    Uses response_schema=ExtractedEmail to GUARANTEE the response is valid JSON
-    matching our Pydantic schema. The Gemini API validates before returning —
-    we will never receive malformed, truncated, or free-text output.
-
-    Args:
-        subject:       Email subject line
-        plain_text:    Plain text body (up to 4000 chars from gmail_client)
-        html_text:     Cleaned text from HTML body (up to 5000 chars)
-        prices_found:  Dollar amounts pre-extracted from HTML by gmail_client
-        image_urls:    Image URLs pre-extracted from HTML by gmail_client
-
-    Returns:
-        ExtractedEmail on success — always a valid, schema-conforming object
-        None only if the API call itself fails (network error, quota exceeded)
+    Returns ExtractedEmail on success, None only on API failure (network/quota).
     """
     if prices_found is None:
         prices_found = []
@@ -146,7 +139,8 @@ def extract_purchases_from_email(
         )
 
     prompt_parts.append(
-        "\nExtract all clothing items from this email following the rules above."
+        "\nExtract all clothing items from this email following the rules above. "
+        "Remember to extract the size for each item if mentioned."
     )
 
     user_prompt = "\n".join(prompt_parts)
@@ -157,20 +151,13 @@ def extract_purchases_from_email(
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                # These two lines together guarantee perfect JSON every time.
-                # response_mime_type tells the API we want JSON.
-                # response_schema tells it exactly what shape that JSON must be.
-                # The API will not return unless the output validates against
-                # ExtractedEmail — no more parse errors, no truncated strings.
                 response_mime_type="application/json",
-                response_schema=ExtractedEmail,
-                temperature=0.1,         # near-deterministic for structured extraction
-                max_output_tokens=4096,  # enough for large SHEIN orders (20+ items)
+                response_schema=ExtractedEmail,  # guarantees perfect JSON
+                temperature=0.1,
+                max_output_tokens=4096,
             ),
         )
 
-        # response.text is guaranteed valid JSON — parse and validate through
-        # Pydantic as a final safety net
         raw_dict = json.loads(response.text)
         result = ExtractedEmail(**raw_dict)
         return result
