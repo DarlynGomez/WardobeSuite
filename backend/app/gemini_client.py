@@ -1,18 +1,15 @@
 import os
 import json
+import re
+import requests
 from typing import Optional
 from enum import Enum
-
-from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
-load_dotenv()
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_ID = "gemini-2.0-flash"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MODEL_ID = "gemini-3.1-pro-preview"
 CONFIDENCE_THRESHOLD = 0.65
+
 
 class Category(str, Enum):
     TOPS = "Tops"
@@ -24,10 +21,10 @@ class Category(str, Enum):
 
 
 class ExtractedItem(BaseModel):
-    item_name: str 
-    price: Optional[float] = None 
+    item_name: str
+    price: Optional[float] = None
     purchased_at: Optional[str] = None
-    image_url: Optional[str] = None 
+    image_url: Optional[str] = None
     category_guess: Optional[Category] = None
     size: Optional[str] = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -39,55 +36,18 @@ class ExtractedEmail(BaseModel):
     items: list[ExtractedItem] = []
 
 
-SYSTEM_PROMPT = """You are a receipt parser that extracts clothing purchase information from order confirmation emails.
+SYSTEM_PROMPT = """You are a receipt parser. Extract clothing purchases from order confirmation emails.
 
-Rules you must follow:
+Return ONLY a JSON object (no markdown, no backticks) with this exact structure:
+{"merchant": "string or null", "items": [{"item_name": "string", "price": number_or_null, "purchased_at": "YYYY-MM-DD or null", "image_url": "string or null", "category_guess": "Tops|Bottoms|Outerwear|Shoes|Accessories|Other or null", "size": "string or null", "confidence": 0.0, "is_clothing": true}]}
 
-item_name:
-- Maximum 60 characters
-- Remove all marketing taglines, size info from the name itself, and SEO keyword spam
-- BAD: "HoloChill Women's Casual Solid Color Waist Tie Bow Pullover Long Sleeve Sweater, New Arrival, Suitable For New Year Casual Wear"
-- GOOD: "HoloChill Waist Tie Pullover Sweater"
-- BAD: "SHEIN PETITE Solid Button Front Vest Blazer & Skirt Suit Set For Summer Business Women Clothes Sexy Office Siren Women Two Pieces Sets"
-- GOOD: "SHEIN PETITE Button Front Blazer & Skirt Set"
-
-size:
-- Extract the size of each item as a short string
-- Letter sizes: "XS", "S", "M", "L", "XL", "XXL", "3XL"
-- Numeric sizes (pants): "28", "30", "32x30", "32x32"
-- Shoe sizes: "7", "8.5", "9", "10", "11"
-- Dress/jean sizes: "0", "2", "4", "6", "8", "10"
-- Plus sizes: "1X", "2X", "3X"
-- If an item appears multiple times with different sizes (e.g. same shirt in S and M), create one entry per size
-- Set null if no size is mentioned for this specific item in the email
-
-is_clothing:
-- TRUE for: clothing, shoes, bags, jewelry, belts, hats, scarves, sunglasses, socks, underwear, swimwear, activewear
-- FALSE for: hair clips, hair extensions, art supplies, electronics, home goods, food, gift cards, candles, phone cases
-
-price:
-- Use prices from the pre-extracted prices list provided
-- Match each item to its most likely price
-- Do NOT invent prices not in the pre-extracted list
-- Set null if you cannot confidently match
-
-image_url:
-- Use URLs from the pre-extracted image list
-- Assign the most relevant URL to each item
-- If unsure, assign in order (first image to first item, etc.)
-- Set null if no images provided
-
-confidence:
-- 0.9-1.0: clear receipt with item name and price both visible
-- 0.7-0.89: order confirmation but price or details unclear
-- 0.5-0.69: email mentions clothing but might be marketing not a receipt
-- below 0.5: very uncertain
-
-purchased_at:
-- The ORDER date as YYYY-MM-DD, not shipping or delivery date
-- Set null if not found
-
-If no clothing items are found, return an empty items list."""
+Rules:
+- item_name: max 60 chars, remove marketing spam
+- is_clothing: true for clothing/shoes/bags/jewelry, false for electronics/food/gift cards
+- price: only use prices from the pre-extracted list, null if unsure
+- confidence: 0.9+ for clear receipt, 0.7-0.89 for unclear, 0.5-0.69 for maybe marketing
+- purchased_at: order date only as YYYY-MM-DD
+- If no clothing found return: {"merchant": null, "items": []}"""
 
 
 def extract_purchases_from_email(
@@ -97,71 +57,44 @@ def extract_purchases_from_email(
     prices_found: list[float] = None,
     image_urls: list[str] = None,
 ) -> Optional[ExtractedEmail]:
-    """
-    Calls Gemini with response_schema to guarantee valid JSON matching ExtractedEmail.
-    The API validates before returning — malformed/truncated JSON is impossible.
 
-    Returns ExtractedEmail on success, None only on API failure (network/quota).
-    """
     if prices_found is None:
         prices_found = []
     if image_urls is None:
         image_urls = []
 
-    prompt_parts = [f"Subject: {subject}\n"]
-
+    parts = [f"Subject: {subject}\n"]
     if plain_text:
-        prompt_parts.append(f"Plain text content:\n{plain_text}\n")
-
-    if html_text:
-        prompt_parts.append(f"HTML content (tags stripped):\n{html_text}\n")
-
+        parts.append(f"Email text:\n{plain_text[:6000]}\n")
     if prices_found:
-        prices_str = ", ".join(f"${p:.2f}" for p in prices_found)
-        prompt_parts.append(
-            f"\nPre-extracted prices from this email: {prices_str}\n"
-            "Match each clothing item to one of these exact prices.\n"
-        )
+        parts.append(f"Prices found in email: {', '.join(f'${p:.2f}' for p in prices_found)}\n")
     else:
-        prompt_parts.append(
-            "\nNo prices could be extracted from this email. Set price to null for all items.\n"
-        )
-
+        parts.append("No prices found. Set price to null.\n")
     if image_urls:
-        urls_block = "\n".join(f"  {i+1}. {url}" for i, url in enumerate(image_urls))
-        prompt_parts.append(
-            f"\nPre-extracted product image URLs:\n{urls_block}\n"
-            "Assign the most relevant URL to each item's image_url field.\n"
-        )
+        parts.append(f"Image URLs: {', '.join(image_urls[:5])}\n")
     else:
-        prompt_parts.append(
-            "\nNo images found in this email. Set image_url to null for all items.\n"
-        )
+        parts.append("No images. Set image_url to null.\n")
+    parts.append("Extract clothing items. Return ONLY the JSON object.")
 
-    prompt_parts.append(
-        "\nExtract all clothing items from this email following the rules above. "
-        "Remember to extract the size for each item if mentioned."
-    )
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": "\n".join(parts)}]}],
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096},
+    }
 
-    user_prompt = "\n".join(prompt_parts)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_ID}:generateContent?key={GEMINI_API_KEY}"
 
     try:
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=ExtractedEmail,  # guarantees perfect JSON
-                temperature=0.1,
-                max_output_tokens=4096,
-            ),
-        )
-
-        raw_dict = json.loads(response.text)
-        result = ExtractedEmail(**raw_dict)
-        return result
-
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            parsed = parsed[0] if parsed else {}
+        return ExtractedEmail(**parsed)
     except Exception as e:
         print(f"[Gemini] API error for subject '{subject[:60]}': {e}")
         return None

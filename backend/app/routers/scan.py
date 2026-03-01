@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import User, ScanSettings, ReviewQueueItem
 from app.gmail_client import get_gmail_service, fetch_emails
 from app.gemini_client import extract_purchases_from_email, CONFIDENCE_THRESHOLD
-from app.emailparser import parse_json   # ← business analytics
+from app.emailparser import parse_json
 
 router = APIRouter()
 
@@ -21,6 +21,10 @@ def get_current_user(
     x_user_id: str = Header(...),
     db: Session = Depends(get_db),
 ) -> User:
+    """
+    Reads X-User-Id header and looks up the User row.
+    Raises clear errors if the user doesn't exist or hasn't connected Gmail.
+    """
     user = db.query(User).filter(User.id == x_user_id).first()
     if not user:
         raise HTTPException(
@@ -68,6 +72,12 @@ def _process_emails_into_queue(
     each item, check if a row with the same (user_id, email_message_id,
     item_name) already exists. This catches the case where the same email
     is processed twice in one scan batch.
+
+    WHY NOT RELY ON THE DB UNIQUE INDEX FOR DEDUP: SQLite's unique index
+    treats NULL as a unique value — so (user_id, msg_id, "Jeans", NULL) and
+    (user_id, msg_id, "Jeans", NULL) are considered different rows because
+    NULL != NULL. This caused duplicates when price_cents was null.
+    We now check in Python instead.
     """
     queued = 0
     errors = 0
@@ -86,6 +96,8 @@ def _process_emails_into_queue(
             skipped_duplicates += 1
             continue
 
+        # Call Gemini with all available context:
+        # plain text, HTML text, pre-extracted prices, and image URLs
         extraction = extract_purchases_from_email(
             subject=email["subject"],
             plain_text=email.get("plain_text", ""),
@@ -98,25 +110,39 @@ def _process_emails_into_queue(
             errors += 1
             continue
 
+        # Track which item names we've already inserted from this email
+        # This prevents duplicates within a single email (e.g. if Gemini
+        # returns the same item twice due to the email listing it in multiple places)
         inserted_names_this_email: set[str] = set()
+
+        # Assign images to items in order if Gemini didn't assign them
+        # (fallback: first image → first item, second image → second item, etc.)
         available_images = email.get("image_urls", [])
         image_index = 0
 
         for item in extraction.items:
+
+            # Filter 1: must be a clothing item
             if not item.is_clothing:
                 continue
+
+            # Filter 2: must meet confidence threshold
             if item.confidence < CONFIDENCE_THRESHOLD:
                 continue
 
+            # LAYER 2 DEDUPE: Skip if we already inserted this item name
+            # from this same email in this scan run
             normalized_name = item.item_name.strip().lower()
             if normalized_name in inserted_names_this_email:
                 skipped_duplicates += 1
                 continue
 
+            # Convert price from dollars to cents
             price_cents: Optional[int] = None
             if item.price is not None:
                 price_cents = int(round(item.price * 100))
 
+            # Parse purchased_at date
             purchased_at: Optional[datetime] = None
             if item.purchased_at:
                 try:
@@ -124,6 +150,9 @@ def _process_emails_into_queue(
                 except (ValueError, TypeError):
                     pass
 
+            # Resolve image URL:
+            # Use Gemini's assignment if it provided one, otherwise take
+            # the next available image from the email's image list
             image_url = item.image_url
             if not image_url and image_index < len(available_images):
                 image_url = available_images[image_index]
@@ -151,6 +180,7 @@ def _process_emails_into_queue(
                 queued += 1
                 inserted_names_this_email.add(normalized_name)
             except IntegrityError:
+                # Fallback: DB unique index caught a duplicate we missed
                 db.rollback()
                 skipped_duplicates += 1
 
@@ -172,7 +202,8 @@ def scan_initial(
 ):
     """
     Scans Gmail for the past N days and populates the Review Queue.
-    Safe to call multiple times — duplicates are handled before any DB insert.
+    Intended for first-time setup but safe to call multiple times
+    (duplicates are handled at the Python level before any DB insert).
     """
     allowed_days = {30, 90, 180}
     if body.initial_scan_days not in allowed_days:
@@ -192,14 +223,10 @@ def scan_initial(
 
     result = _process_emails_into_queue(emails, user.id, db)
 
-    # ── Business analytics: compute and store aggregates for this user ────────
-    # This runs after every scan so the user_analytics table stays up to date.
-    # compute_and_store_analytics reads ReviewQueueItems directly — no extra args needed.
     try:
         parse_json(user_id=user.id, db=db)
         print(f"[Scan] Analytics updated for user {user.email}")
     except Exception as e:
-        # Never let analytics failure block the scan response
         print(f"[Scan] Analytics error (non-fatal): {e}")
 
     # Save scan settings so /scan/new knows where to start next time
@@ -241,7 +268,6 @@ def scan_new(
 
     result = _process_emails_into_queue(emails, user.id, db)
 
-    # ── Business analytics: update aggregates after new scan ─────────────────
     try:
         parse_json(user_id=user.id, db=db)
     except Exception as e:

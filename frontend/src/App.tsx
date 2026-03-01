@@ -21,9 +21,13 @@ import {
   Sun,
   Moon,
   Building2,
+  Loader2,
 } from "lucide-react";
 
-// Types & Interfaces
+// ── Backend URL ───────────────────────────────────────────────────────────────
+const API = "http://localhost:8000";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 type ViewState =
   | "landing"
   | "signup"
@@ -32,7 +36,8 @@ type ViewState =
   | "verification"
   | "scanning"
   | "review"
-  | " consumer dashboard"
+  | "consumer dashboard"
+  | "business dashboard"
   | "budget"
   | "wardrobe"
   | "profile";
@@ -49,11 +54,21 @@ type ClothingCategory =
   | "Accessories";
 
 interface WardrobeItem {
-  id: number;
+  id: string | number;
   name: string;
   price: number;
   image: string;
   category: ClothingCategory;
+}
+
+interface ReviewQueueItem {
+  id: string;
+  item_name: string;
+  merchant: string | null;
+  category: string | null;
+  price_cents: number | null;
+  image_url: string | null;
+  price_missing: boolean;
 }
 
 interface Outfit {
@@ -62,50 +77,40 @@ interface Outfit {
   items: WardrobeItem[];
 }
 
-// Theme definitions for light and dark modes, used for consistent styling across components
+// ── Theme ─────────────────────────────────────────────────────────────────────
 const theme = {
   light: {
-    // Backgrounds
     pageBg: "bg-white",
     surfaceBg: "bg-slate-50",
     cardBg: "bg-white",
     mutedBg: "bg-slate-100",
-    // Text
     headingText: "text-slate-900",
     bodyText: "text-slate-700",
     subtleText: "text-slate-500",
     mutedText: "text-slate-400",
-    // Borders
     border: "border-slate-200",
     subtleBorder: "border-slate-100",
-    // Header
     headerBg: "bg-white/85",
-    // Accent — teal (primary actions, links, highlights)
-    accentBg: "bg-teal-600",
-    accentHover: "hover:bg-teal-700",
-    accentText: "text-teal-600",
-    accentSubtle: "bg-teal-50",
-    accentSubtleText: "text-teal-700",
-    // Secondary accent — sky (wardrobe / outfit builder)
-    skyBg: "bg-sky-600",
-    skyHover: "hover:bg-sky-700",
-    skyText: "text-sky-600",
-    skySubtle: "bg-sky-50",
-    skySubtleText: "text-sky-700",
-    // Inputs
+    accentBg: "bg-indigo-600",
+    accentHover: "hover:bg-indigo-700",
+    accentText: "text-indigo-600",
+    accentSubtle: "bg-indigo-50",
+    accentSubtleText: "text-indigo-700",
+    skyBg: "bg-indigo-600",
+    skyHover: "hover:bg-indigo-700",
+    skyText: "text-indigo-600",
+    skySubtle: "bg-indigo-50",
+    skySubtleText: "text-indigo-700",
     inputBg: "bg-slate-50",
     inputBorder: "border-slate-200",
-    inputFocus: "focus:border-teal-500 focus:ring-teal-500/20",
+    inputFocus: "focus:border-indigo-500 focus:ring-indigo-500/20",
     inputText: "text-slate-900",
-    // Nav buttons
     navBtn: "bg-slate-100 text-slate-600 hover:bg-slate-200",
-    // Filter panel
     filterBg: "bg-white",
-    filterItemHover: "hover:bg-teal-50 hover:text-teal-700",
-    filterActiveItem: "bg-teal-50 text-teal-700 font-semibold",
+    filterItemHover: "hover:bg-indigo-50 hover:text-indigo-700",
+    filterActiveItem: "bg-indigo-50 text-indigo-700 font-semibold",
     filterPillBg:
-      "bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-700",
-    // Swipe card
+      "bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700",
     swipeCard: "bg-white border-slate-200",
   },
   dark: {
@@ -120,31 +125,31 @@ const theme = {
     border: "border-slate-700",
     subtleBorder: "border-slate-700",
     headerBg: "bg-slate-900/90",
-    accentBg: "bg-teal-500",
-    accentHover: "hover:bg-teal-600",
-    accentText: "text-teal-400",
-    accentSubtle: "bg-teal-900/50",
-    accentSubtleText: "text-teal-300",
-    skyBg: "bg-sky-500",
-    skyHover: "hover:bg-sky-600",
-    skyText: "text-sky-400",
-    skySubtle: "bg-sky-900/50",
-    skySubtleText: "text-sky-300",
+    accentBg: "bg-indigo-500",
+    accentHover: "hover:bg-indigo-600",
+    accentText: "text-indigo-400",
+    accentSubtle: "bg-indigo-900/50",
+    accentSubtleText: "text-indigo-300",
+    skyBg: "bg-indigo-500",
+    skyHover: "hover:bg-indigo-600",
+    skyText: "text-indigo-400",
+    skySubtle: "bg-indigo-900/50",
+    skySubtleText: "text-indigo-300",
     inputBg: "bg-slate-700",
     inputBorder: "border-slate-600",
-    inputFocus: "focus:border-teal-400 focus:ring-teal-400/20",
+    inputFocus: "focus:border-indigo-400 focus:ring-indigo-400/20",
     inputText: "text-slate-100",
     navBtn: "bg-slate-700 text-slate-300 hover:bg-slate-600",
     filterBg: "bg-slate-800",
-    filterItemHover: "hover:bg-teal-900/40 hover:text-teal-300",
-    filterActiveItem: "bg-teal-900/50 text-teal-300 font-semibold",
+    filterItemHover: "hover:bg-indigo-900/40 hover:text-indigo-300",
+    filterActiveItem: "bg-indigo-900/50 text-indigo-300 font-semibold",
     filterPillBg:
-      "bg-slate-700 text-slate-300 hover:bg-teal-900/40 hover:text-teal-300",
+      "bg-slate-700 text-slate-300 hover:bg-indigo-900/40 hover:text-indigo-300",
     swipeCard: "bg-slate-800 border-slate-700",
   },
 };
 
-// Filter section: accordian style
+// ── FilterSection component ───────────────────────────────────────────────────
 function FilterSection({
   title,
   isOpen,
@@ -155,7 +160,7 @@ function FilterSection({
   title: string;
   isOpen: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   tk: typeof theme.light;
 }) {
   return (
@@ -189,16 +194,27 @@ function FilterSection({
   );
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [view, setView] = React.useState<ViewState>("landing");
   const [isDark, setIsDark] = React.useState(false);
   const tk = isDark ? theme.dark : theme.light;
 
+  // UI state
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [carouselIndex, setCarouselIndex] = React.useState(0);
+  const [filterOpen, setFilterOpen] = React.useState(false);
+  const [openSection, setOpenSection] = React.useState<string | null>(null);
+  const [outfitBuilderOpen, setOutfitBuilderOpen] = React.useState(false);
+  const [isCreatingOutfit, setIsCreatingOutfit] = React.useState(false);
+  const [newOutfitName, setNewOutfitName] = React.useState("");
+  const [showSwipeTip, setShowSwipeTip] = React.useState(true);
+  const [recommendationIndex, setRecommendationIndex] = React.useState(0);
 
-  // User & App State
+  // Auth & backend state
+  const [userId, setUserId] = React.useState<string>(
+    () => localStorage.getItem("wardrobeUserId") || ""
+  );
   const [user, setUser] = React.useState({
     firstName: "",
     lastName: "",
@@ -207,13 +223,21 @@ export default function App() {
   const [accountType, setAccountType] = React.useState<"consumer" | "business">(
     "consumer"
   );
+  const [authError, setAuthError] = React.useState("");
+  const [authLoading, setAuthLoading] = React.useState(false);
+  const [manualPrice, setManualPrice] = React.useState("");
+
+  // App state
   const [isVerified, setIsVerified] = React.useState(false);
   const [scannedCount, setScannedCount] = React.useState(0);
   const [isScanning, setIsScanning] = React.useState(false);
   const [budget, setBudget] = React.useState<number | null>(null);
   const [historicalSpend, setHistoricalSpend] = React.useState(1240.5);
+  const [activeCategory, setActiveCategory] =
+    React.useState<ClothingCategory>("All");
+  const [wardrobeSearch, setWardrobeSearch] = React.useState("");
 
-  // Wardrobe State
+  // Wardrobe & outfit state
   const [wardrobeItems, setWardrobeItems] = React.useState<WardrobeItem[]>([
     {
       id: 10,
@@ -263,103 +287,367 @@ export default function App() {
         "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?auto=format&fit=crop&q=80&w=800",
       category: "Accessories",
     },
-    {
-      id: 16,
-      name: "Linen Shirt",
-      price: 55,
-      image:
-        "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800",
-      category: "Tops",
-    },
-    {
-      id: 17,
-      name: "Canvas Sneakers",
-      price: 45,
-      image:
-        "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&q=80&w=800",
-      category: "Footwear",
-    },
-    {
-      id: 18,
-      name: "Leather Belt",
-      price: 40,
-      image:
-        "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=800",
-      category: "Accessories",
-    },
   ]);
-  const [activeCategory, setActiveCategory] =
-    React.useState<ClothingCategory>("All");
-  const [wardrobeSearch, setWardrobeSearch] = React.useState("");
-  const [filterOpen, setFilterOpen] = React.useState(false);
-  const [openSection, setOpenSection] = React.useState<string | null>(null);
-
-  // Outfit Builder State
   const [outfits, setOutfits] = React.useState<Outfit[]>([
     { id: 1, name: "Smart Casual Monday", items: [] },
   ]);
   const [activeOutfitId, setActiveOutfitId] = React.useState<number | null>(
     null
   );
-  const [isCreatingOutfit, setIsCreatingOutfit] = React.useState(false);
-  const [newOutfitName, setNewOutfitName] = React.useState("");
-  const [outfitBuilderOpen, setOutfitBuilderOpen] = React.useState(false);
 
-  // Tinder Swipe State
-  const [itemsToReview] = React.useState([
-    {
-      id: 1,
-      name: "Vintage Denim Jacket",
-      price: 85,
-      image:
-        "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?auto=format&fit=crop&q=80&w=800",
-      isClothing: true,
-      category: "Outerwear" as ClothingCategory,
-    },
-    {
-      id: 2,
-      name: "Organic Coffee Beans",
-      price: 18,
-      image:
-        "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?auto=format&fit=crop&q=80&w=800",
-      isClothing: false,
-      category: "Accessories" as ClothingCategory,
-    },
-    {
-      id: 3,
-      name: "Minimalist Leather Boots",
-      price: 160,
-      image:
-        "https://images.unsplash.com/photo-1520639888713-7851133b1ed0?auto=format&fit=crop&q=80&w=800",
-      isClothing: true,
-      category: "Footwear" as ClothingCategory,
-    },
-    {
-      id: 4,
-      name: "Smart LED Bulb",
-      price: 25,
-      image:
-        "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=800",
-      isClothing: false,
-      category: "Accessories" as ClothingCategory,
-    },
-    {
-      id: 5,
-      name: "Graphic Cotton Tee",
-      price: 32,
-      image:
-        "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800",
-      isClothing: true,
-      category: "Tops" as ClothingCategory,
-    },
-  ]);
+  // Review queue state
+  const [itemsToReview, setItemsToReview] = React.useState<ReviewQueueItem[]>(
+    []
+  );
   const [reviewIndex, setReviewIndex] = React.useState(0);
   const [swipeDirection, setSwipeDirection] = React.useState<
     "left" | "right" | null
   >(null);
-  const [showSwipeTip, setShowSwipeTip] = React.useState(true);
 
-  // Recommendations
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const apiHeaders = () => ({
+    "Content-Type": "application/json",
+    "X-User-Id": userId,
+  });
+
+  const dashView =
+    accountType === "business" ? "business dashboard" : "consumer dashboard";
+
+  // ── OAuth callback listener ──────────────────────────────────────────────────
+  // After Google redirects back to the frontend with ?oauth=success&user_id=...
+  // this effect picks it up and auto-starts the scan.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("oauth") === "success") {
+      const uid = params.get("user_id") || "";
+      if (uid) {
+        localStorage.setItem("wardrobeUserId", uid);
+        setUserId(uid);
+        window.history.replaceState({}, "", window.location.pathname);
+        startScanning(uid);
+      }
+    }
+  }, []);
+
+  // ── Load wardrobe from backend when dashboard opens ──────────────────────────
+  React.useEffect(() => {
+    if (!["consumer dashboard", "wardrobe"].includes(view) || !userId) return;
+    fetch(`${API}/items`, { headers: apiHeaders() })
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        const mapped = data.map((item) => ({
+          id: item.id,
+          name: item.item_name,
+          price: (item.price_cents ?? 0) / 100,
+          image:
+            item.image_url ||
+            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
+          category: (item.category as ClothingCategory) || "Accessories",
+        }));
+        if (mapped.length > 0) setWardrobeItems(mapped);
+      })
+      .catch(() => {});
+  }, [view, userId]);
+
+  // ── Auth handlers ────────────────────────────────────────────────────────────
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    const fd = new FormData(e.currentTarget);
+    const firstName =
+      (fd.get("firstName") as string) ||
+      (fd.get("businessName") as string) ||
+      "";
+    const lastName = (fd.get("lastName") as string) || "";
+    const email = fd.get("email") as string;
+    const password = fd.get("password") as string;
+
+    try {
+      const res = await fetch(`${API}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Registration failed");
+
+      localStorage.setItem("wardrobeUserId", data.user_id);
+      setUserId(data.user_id);
+      setUser({
+        firstName: data.first_name || firstName,
+        lastName: data.last_name || lastName,
+        email: data.email,
+      });
+      setView("onboarding");
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    const fd = new FormData(e.currentTarget);
+
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: fd.get("email"),
+          password: fd.get("password"),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Login failed");
+
+      localStorage.setItem("wardrobeUserId", data.user_id);
+      setUserId(data.user_id);
+      setUser({
+        firstName: data.first_name || "",
+        lastName: data.last_name || "",
+        email: data.email,
+      });
+
+      if (data.gmail_connected) {
+        setView(dashView);
+      } else {
+        setView("verification");
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGmailConnect = async () => {
+    try {
+      const res = await fetch(`${API}/auth/google/start?user_id=${userId}`);
+      const data = await res.json();
+      if (data.auth_url) window.location.href = data.auth_url;
+    } catch {
+      // If backend unreachable, still let them proceed for demo purposes
+      startScanning();
+    }
+  };
+
+  // ── Scan ─────────────────────────────────────────────────────────────────────
+  const startScanning = async (uid?: string) => {
+    const effectiveId = uid || userId;
+    setView("scanning");
+    setIsScanning(true);
+    setScannedCount(0);
+
+    try {
+      const res = await fetch(`${API}/scan/initial`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": effectiveId,
+        },
+        body: JSON.stringify({ initial_scan_days: 90 }),
+      });
+      const data = await res.json();
+      setScannedCount(data.queued_count ?? 0);
+    } catch {
+      setScannedCount(0);
+    } finally {
+      setIsScanning(false);
+    }
+
+    // Pre-load review queue
+    try {
+      const res = await fetch(`${API}/review-items`, {
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": effectiveId,
+        },
+      });
+      const items: ReviewQueueItem[] = await res.json();
+      setItemsToReview(items);
+      setReviewIndex(0);
+    } catch {
+      /* keep empty */
+    }
+  };
+
+  // ── Swipe handler ────────────────────────────────────────────────────────────
+  const handleSwipe = async (direction: "left" | "right") => {
+    setSwipeDirection(direction);
+    const currentItem = itemsToReview[reviewIndex];
+    if (!currentItem) return;
+
+    if (direction === "right") {
+      const body: Record<string, any> = {};
+      if (currentItem.price_missing && manualPrice) {
+        body.edited_price_cents = Math.round(parseFloat(manualPrice) * 100);
+      }
+      try {
+        const res = await fetch(
+          `${API}/review-items/${currentItem.id}/approve`,
+          {
+            method: "POST",
+            headers: apiHeaders(),
+            body: JSON.stringify(body),
+          }
+        );
+        if (res.ok) {
+          const approved = await res.json();
+          setWardrobeItems((prev) => {
+            if (prev.find((i) => i.id === approved.wardrobe_item_id))
+              return prev;
+            return [
+              ...prev,
+              {
+                id: approved.wardrobe_item_id,
+                name: approved.item_name,
+                price: (approved.price_cents ?? 0) / 100,
+                image:
+                  currentItem.image_url ||
+                  "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
+                category:
+                  (approved.category as ClothingCategory) || "Accessories",
+              },
+            ];
+          });
+        }
+      } catch {
+        /* still advance */
+      }
+    } else {
+      try {
+        await fetch(`${API}/review-items/${currentItem.id}/reject`, {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({}),
+        });
+      } catch {
+        /* still advance */
+      }
+    }
+
+    setManualPrice("");
+    setTimeout(() => {
+      if (reviewIndex < itemsToReview.length - 1) {
+        setReviewIndex((p) => p + 1);
+        setSwipeDirection(null);
+      } else {
+        setView(dashView);
+      }
+    }, 200);
+  };
+
+  // ── Outfit helpers ───────────────────────────────────────────────────────────
+  const addItemToOutfit = (item: WardrobeItem) => {
+    if (!activeOutfitId) return;
+    setOutfits((prev) =>
+      prev.map((o) => {
+        if (o.id !== activeOutfitId) return o;
+        if (o.items.find((i) => i.id === item.id)) return o;
+        return { ...o, items: [...o.items, item] };
+      })
+    );
+  };
+  const removeItemFromOutfit = (outfitId: number, itemId: string | number) => {
+    setOutfits((prev) =>
+      prev.map((o) => {
+        if (o.id !== outfitId) return o;
+        return { ...o, items: o.items.filter((i) => i.id !== itemId) };
+      })
+    );
+  };
+  const createOutfit = () => {
+    if (!newOutfitName.trim()) return;
+    const o: Outfit = { id: Date.now(), name: newOutfitName.trim(), items: [] };
+    setOutfits((prev) => [...prev, o]);
+    setActiveOutfitId(o.id);
+    setNewOutfitName("");
+    setIsCreatingOutfit(false);
+    setOutfitBuilderOpen(true);
+  };
+  const deleteOutfit = (id: number) => {
+    setOutfits((prev) => prev.filter((o) => o.id !== id));
+    if (activeOutfitId === id) setActiveOutfitId(null);
+  };
+
+  // ── Misc helpers ─────────────────────────────────────────────────────────────
+  const nextSlide = () =>
+    setCarouselIndex((p) => (p + 1) % onboardingData.length);
+  const prevSlide = () =>
+    setCarouselIndex(
+      (p) => (p - 1 + onboardingData.length) % onboardingData.length
+    );
+  const nextRec = () =>
+    setRecommendationIndex((p) => (p + 1) % (recommendations.length - 4));
+  const prevRec = () =>
+    setRecommendationIndex(
+      (p) =>
+        (p - 1 + (recommendations.length - 4)) % (recommendations.length - 4)
+    );
+
+  const filteredWardrobe = wardrobeItems.filter((item) => {
+    const matchesCategory =
+      activeCategory === "All" || item.category === activeCategory;
+    const matchesSearch = item.name
+      .toLowerCase()
+      .includes(wardrobeSearch.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+  const activeOutfit = outfits.find((o) => o.id === activeOutfitId) || null;
+  const categories: ClothingCategory[] = [
+    "All",
+    "Tops",
+    "Bottoms",
+    "Dresses",
+    "Outerwear",
+    "Footwear",
+    "Swimwear",
+    "Undergarments",
+    "Accessories",
+  ];
+
+  // ── Static data ──────────────────────────────────────────────────────────────
+  const onboardingData = [
+    {
+      title: "Scan Your Digital Purchases",
+      image:
+        "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
+      description:
+        "WardrobeSuite securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits.",
+    },
+    {
+      title: "Set a Budget and Style Preferences",
+      image:
+        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800",
+      description:
+        "Customize your experience by setting a monthly clothing budget and selecting your style preferences. WardrobeSuite learns from your choices to provide personalized recommendations.",
+    },
+    {
+      title: "Advanced Security",
+      image:
+        "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800",
+      description:
+        "Rest easy knowing your data is protected by enterprise-grade encryption and protocols.",
+    },
+    {
+      title: "Scalable Infrastructure",
+      image:
+        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800",
+      description:
+        "Our platform grows with you, handling everything from your first user to your first million.",
+    },
+  ];
+
   const recommendations = [
     {
       id: 101,
@@ -453,165 +741,13 @@ export default function App() {
     },
   ];
 
-  const onboardingData = [
-    {
-      title: "Scan Your Digital Purchases",
-      image:
-        "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
-      description:
-        "WardrobeSuite securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits.",
-    },
-    {
-      title: "Set a Budget and Style Preferences",
-      image:
-        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800",
-      description:
-        "Customize your experience by setting a monthly clothing budget and selecting your style preferences. WardrobeSuite learns from your choices to provide personalized recommendations.",
-    },
-    {
-      title: "Advanced Security",
-      image:
-        "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800",
-      description:
-        "Rest easy knowing your data is protected by enterprise-grade encryption and protocols.",
-    },
-    {
-      title: "Scalable Infrastructure",
-      image:
-        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800",
-      description:
-        "Our platform grows with you, handling everything from your first user to your first million.",
-    },
-  ];
-
-  const categories: ClothingCategory[] = [
-    "All",
-    "Tops",
-    "Bottoms",
-    "Dresses",
-    "Outerwear",
-    "Footwear",
-    "Swimwear",
-    "Undergarments",
-    "Accessories",
-  ];
-
-  const filteredWardrobe = wardrobeItems.filter((item) => {
-    const matchesCategory =
-      activeCategory === "All" || item.category === activeCategory;
-    const matchesSearch = item.name
-      .toLowerCase()
-      .includes(wardrobeSearch.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  const activeOutfit = outfits.find((o) => o.id === activeOutfitId) || null;
-
-  const addItemToOutfit = (item: WardrobeItem) => {
-    if (!activeOutfitId) return;
-    setOutfits((prev) =>
-      prev.map((outfit) => {
-        if (outfit.id !== activeOutfitId) return outfit;
-        if (outfit.items.find((i) => i.id === item.id)) return outfit;
-        return { ...outfit, items: [...outfit.items, item] };
-      })
-    );
-  };
-
-  const removeItemFromOutfit = (outfitId: number, itemId: number) => {
-    setOutfits((prev) =>
-      prev.map((outfit) => {
-        if (outfit.id !== outfitId) return outfit;
-        return {
-          ...outfit,
-          items: outfit.items.filter((i) => i.id !== itemId),
-        };
-      })
-    );
-  };
-
-  const createOutfit = () => {
-    if (!newOutfitName.trim()) return;
-    const newOutfit: Outfit = {
-      id: Date.now(),
-      name: newOutfitName.trim(),
-      items: [],
-    };
-    setOutfits((prev) => [...prev, newOutfit]);
-    setActiveOutfitId(newOutfit.id);
-    setNewOutfitName("");
-    setIsCreatingOutfit(false);
-    setOutfitBuilderOpen(true);
-  };
-
-  const deleteOutfit = (id: number) => {
-    setOutfits((prev) => prev.filter((o) => o.id !== id));
-    if (activeOutfitId === id) setActiveOutfitId(null);
-  };
-
-  const nextSlide = () =>
-    setCarouselIndex((p) => (p + 1) % onboardingData.length);
-  const prevSlide = () =>
-    setCarouselIndex(
-      (p) => (p - 1 + onboardingData.length) % onboardingData.length
-    );
-
-  const startScanning = () => {
-    setView("scanning");
-    setIsScanning(true);
-    let count = 0;
-    const interval = setInterval(() => {
-      count += Math.floor(Math.random() * 3) + 1;
-      setScannedCount(count);
-      if (count >= 42) {
-        clearInterval(interval);
-        setIsScanning(false);
-      }
-    }, 200);
-  };
-
-  const handleSwipe = (direction: "left" | "right") => {
-    setSwipeDirection(direction);
-    const currentItem = itemsToReview[reviewIndex];
-    if (direction === "right" && currentItem.isClothing) {
-      setWardrobeItems((prev) => {
-        if (prev.find((i) => i.id === currentItem.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: currentItem.id,
-            name: currentItem.name,
-            price: currentItem.price,
-            image: currentItem.image,
-            category: currentItem.category,
-          },
-        ];
-      });
-    }
-    setTimeout(() => {
-      if (reviewIndex < itemsToReview.length - 1) {
-        setReviewIndex((p) => p + 1);
-        setSwipeDirection(null);
-      } else {
-        setView("consumer dashboard");
-      }
-    }, 200);
-  };
-
-  const [recommendationIndex, setRecommendationIndex] = React.useState(0);
-  const nextRec = () =>
-    setRecommendationIndex((p) => (p + 1) % (recommendations.length - 4));
-  const prevRec = () =>
-    setRecommendationIndex(
-      (p) =>
-        (p - 1 + (recommendations.length - 4)) % (recommendations.length - 4)
-    );
-
-  // Reusable class strings
-  const inputCls = `w-full px-4 py-3 text-base ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`;
+  // ── Reusable classes ─────────────────────────────────────────────────────────
+  const inputCls = `w-full px-4 py-3 text-base ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all`;
   const labelCls = `block text-xs font-bold uppercase tracking-wider ${tk.mutedText} mb-1.5`;
+  const primaryBtn = isDark
+    ? "bg-slate-200 text-slate-900 hover:bg-white"
+    : "bg-slate-900 text-white hover:bg-slate-800";
 
-  // Shared dark-mode toggle button
   const DarkToggle = () => (
     <button
       onClick={() => setIsDark((d) => !d)}
@@ -622,7 +758,15 @@ export default function App() {
     </button>
   );
 
-  // Render
+  const appViews = [
+    "consumer dashboard",
+    "business dashboard",
+    "budget",
+    "wardrobe",
+    "profile",
+  ];
+
+  // ── RENDER ────────────────────────────────────────────────────────────────────
   return (
     <div
       className={`min-h-screen font-sans ${tk.pageBg} ${tk.bodyText} flex flex-col transition-colors duration-300`}
@@ -632,20 +776,14 @@ export default function App() {
         className={`fixed top-0 left-0 right-0 z-50 ${tk.headerBg} backdrop-blur-md border-b ${tk.border} transition-colors duration-300`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center relative">
-          {/* Clickable logo */}
+          {/* Logo */}
           <motion.button
             layout
             onClick={() => setView("landing")}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             aria-label="Go to home"
             className={`flex items-center gap-2 absolute ${
-              [
-                "landing",
-                "consumer dashboard",
-                "budget",
-                "wardrobe",
-                "profile",
-              ].includes(view)
+              ["landing", ...appViews].includes(view)
                 ? "left-4 sm:left-6"
                 : "left-1/2 -translate-x-1/2"
             }`}
@@ -662,7 +800,7 @@ export default function App() {
             </span>
           </motion.button>
 
-          {/* Landing desktop nav */}
+          {/* Landing nav */}
           <AnimatePresence>
             {view === "landing" && (
               <motion.nav
@@ -685,7 +823,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setView("signup")}
-                  className={`px-5 py-2.5 ${tk.accentBg} text-white rounded-full text-sm font-semibold ${tk.accentHover} transition-all`}
+                  className={`px-5 py-2.5 ${primaryBtn} rounded-full text-sm font-semibold transition-all`}
                 >
                   Get Started
                 </button>
@@ -694,11 +832,9 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* App nav (dashboard / wardrobe / profile) */}
+          {/* App nav */}
           <AnimatePresence>
-            {["consumer dashboard", "budget", "wardrobe", "profile"].includes(
-              view
-            ) && (
+            {appViews.includes(view) && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -711,21 +847,17 @@ export default function App() {
                       ? `${tk.accentBg} text-white`
                       : tk.navBtn
                   }`}
-                  aria-label="Wardrobe"
                 >
                   <Shirt size={14} />
                   <span className="hidden sm:inline">Wardrobe</span>
                 </button>
                 <button
-                  onClick={() => setView("consumer dashboard")}
+                  onClick={() => setView(dashView)}
                   className={`px-3 sm:px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                    view === "consumer dashboard"
-                      ? isDark
-                        ? "bg-slate-100 text-slate-900"
-                        : "bg-slate-900 text-white"
+                    ["consumer dashboard", "business dashboard"].includes(view)
+                      ? `${primaryBtn}`
                       : tk.navBtn
                   }`}
-                  aria-label="Dashboard"
                 >
                   <span className="hidden sm:inline">Dashboard</span>
                   <span className="sm:hidden">Home</span>
@@ -735,7 +867,6 @@ export default function App() {
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
                     view === "profile" ? `${tk.accentBg} text-white` : tk.navBtn
                   }`}
-                  aria-label="Profile"
                 >
                   <User size={17} />
                 </button>
@@ -744,7 +875,7 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Auth / intermediate pages: just show dark toggle */}
+          {/* Auth pages: just dark toggle */}
           {[
             "signup",
             "signin",
@@ -758,7 +889,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ── Mobile hamburger (landing only) */}
+          {/* Mobile hamburger */}
           {view === "landing" && (
             <div className="md:hidden flex items-center gap-2 ml-auto">
               <DarkToggle />
@@ -766,7 +897,6 @@ export default function App() {
                 className={`p-2 ${tk.subtleText}`}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 aria-label="Toggle navigation"
-                aria-expanded={isMenuOpen}
               >
                 {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
@@ -813,10 +943,10 @@ export default function App() {
         </AnimatePresence>
       </header>
 
-      {/* ═══════════════════════════ MAIN ════════════════════════════════════ */}
+      {/* MAIN */}
       <main className="flex-1 flex flex-col">
         <AnimatePresence mode="wait">
-          {/* ═══════════ LANDING ═══════════ */}
+          {/* ══ LANDING ══════════════════════════════════════════════════════════ */}
           {view === "landing" && (
             <motion.div
               key="landing"
@@ -824,7 +954,6 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {/* Hero */}
               <section className="pt-28 sm:pt-36 pb-16 px-4 sm:px-6">
                 <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center">
                   <motion.div
@@ -873,21 +1002,21 @@ export default function App() {
                     transition={{ duration: 0.8, delay: 0.2 }}
                     className="relative"
                   >
-                    <div className="aspect-[4/3] rounded-[3rem] overflow-hidden shadow-2xl">
+                    <div className="
+                     rounded-[3rem] overflow-hidden shadow-2xl">
                       <img
                         src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=2426"
-                        alt="WardrobeSuite dashboard preview"
+                        alt="Dashboard"
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                     </div>
-                    <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-teal-100 rounded-full blur-3xl -z-10 opacity-60" />
+                    <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-indigo-100 rounded-full blur-3xl -z-10 opacity-60" />
                     <div className="absolute -top-6 -right-6 w-48 h-48 bg-sky-100 rounded-full blur-3xl -z-10 opacity-60" />
                   </motion.div>
                 </div>
               </section>
 
-              {/* Scroll indicator */}
               <div className="flex justify-center pb-8">
                 <motion.div
                   animate={{ y: [0, 10, 0] }}
@@ -901,7 +1030,6 @@ export default function App() {
                 </motion.div>
               </div>
 
-              {/* Meet the team header */}
               <section
                 id="MeetTheTeam"
                 className={`pt-16 pb-10 ${tk.surfaceBg} px-4 sm:px-6`}
@@ -935,7 +1063,6 @@ export default function App() {
                 </motion.div>
               </section>
 
-              {/* Pull-quote */}
               <section className="py-10 px-4 sm:px-6">
                 <div className="max-w-4xl mx-auto text-center">
                   <motion.h2
@@ -950,7 +1077,6 @@ export default function App() {
                 </div>
               </section>
 
-              {/* Team grid */}
               <section className="pt-4 pb-24 px-4 sm:px-6">
                 <div className="max-w-7xl mx-auto grid sm:grid-cols-2 md:grid-cols-3 gap-10">
                   {[
@@ -972,7 +1098,7 @@ export default function App() {
                       img: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800",
                       desc: "Built for teams of all sizes. Share projects, leave comments, and collaborate in real-time without missing a beat.",
                     },
-                  ].map((student, i) => (
+                  ].map((s, i) => (
                     <motion.div
                       key={i}
                       initial={{ opacity: 0, y: 20 }}
@@ -985,8 +1111,8 @@ export default function App() {
                         className={`aspect-video rounded-2xl overflow-hidden mb-6 ${tk.mutedBg}`}
                       >
                         <img
-                          src={student.img}
-                          alt={student.name}
+                          src={s.img}
+                          alt={s.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           referrerPolicy="no-referrer"
                         />
@@ -994,13 +1120,13 @@ export default function App() {
                       <h3
                         className={`text-xl sm:text-2xl font-bold ${tk.headingText} mb-1`}
                       >
-                        {student.name}
+                        {s.name}
                       </h3>
                       <h4 className={`text-base ${tk.mutedText} mb-3`}>
-                        {student.role}
+                        {s.role}
                       </h4>
                       <p className={`${tk.subtleText} leading-relaxed`}>
-                        {student.desc}
+                        {s.desc}
                       </p>
                     </motion.div>
                   ))}
@@ -1009,7 +1135,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* Sign up/sign in */}
+          {/* ══ SIGN UP / SIGN IN ════════════════════════════════════════════════ */}
           {(view === "signup" || view === "signin") && (
             <motion.div
               key={view}
@@ -1039,58 +1165,42 @@ export default function App() {
                   <div
                     className={`flex ${tk.surfaceBg} rounded-2xl p-1 mb-6 border ${tk.border}`}
                   >
-                    <button
-                      onClick={() => setAccountType("consumer")}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                        accountType === "consumer"
-                          ? `${tk.cardBg} ${tk.headingText} shadow-sm border ${tk.border}`
-                          : tk.mutedText
-                      }`}
-                    >
-                      <User size={15} /> Consumer
-                    </button>
-                    <button
-                      onClick={() => setAccountType("business")}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                        accountType === "business"
-                          ? `${tk.cardBg} ${tk.headingText} shadow-sm border ${tk.border}`
-                          : tk.mutedText
-                      }`}
-                    >
-                      <Building2 size={15} /> Business
-                    </button>
+                    {(["consumer", "business"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setAccountType(t)}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                          accountType === t
+                            ? `${tk.cardBg} ${tk.headingText} shadow-sm border ${tk.border}`
+                            : tk.mutedText
+                        }`}
+                      >
+                        {t === "consumer" ? (
+                          <User size={15} />
+                        ) : (
+                          <Building2 size={15} />
+                        )}
+                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {authError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
+                    {authError}
                   </div>
                 )}
 
                 <form
                   className="space-y-4"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (view === "signup") {
-                      const fd = new FormData(e.currentTarget);
-                      setUser({
-                        firstName:
-                          (fd.get("firstName") as string) ||
-                          (fd.get("businessName") as string) ||
-                          "",
-                        lastName: (fd.get("lastName") as string) || "",
-                        email: fd.get("email") as string,
-                      });
-                      setView("onboarding");
-                    } else {
-                      setView("consumer dashboard");
-                    }
-                  }}
+                  onSubmit={view === "signup" ? handleRegister : handleLogin}
                 >
-                  {/* Consumer fields */}
                   {view === "signup" && accountType === "consumer" && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label htmlFor="firstName" className={labelCls}>
-                          First Name
-                        </label>
+                        <label className={labelCls}>First Name</label>
                         <input
-                          id="firstName"
                           name="firstName"
                           type="text"
                           required
@@ -1100,11 +1210,8 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label htmlFor="lastName" className={labelCls}>
-                          Last Name
-                        </label>
+                        <label className={labelCls}>Last Name</label>
                         <input
-                          id="lastName"
                           name="lastName"
                           type="text"
                           required
@@ -1115,16 +1222,11 @@ export default function App() {
                       </div>
                     </div>
                   )}
-
-                  {/* Business fields */}
                   {view === "signup" && accountType === "business" && (
                     <>
                       <div>
-                        <label htmlFor="businessName" className={labelCls}>
-                          Business Name
-                        </label>
+                        <label className={labelCls}>Business Name</label>
                         <input
-                          id="businessName"
                           name="businessName"
                           type="text"
                           required
@@ -1135,15 +1237,8 @@ export default function App() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label htmlFor="industry" className={labelCls}>
-                            Industry
-                          </label>
-                          <select
-                            id="industry"
-                            name="industry"
-                            required
-                            className={inputCls}
-                          >
+                          <label className={labelCls}>Industry</label>
+                          <select name="industry" required className={inputCls}>
                             <option value="">Select…</option>
                             <option>Retail</option>
                             <option>Wholesale</option>
@@ -1153,11 +1248,8 @@ export default function App() {
                           </select>
                         </div>
                         <div>
-                          <label htmlFor="companySize" className={labelCls}>
-                            Company Size
-                          </label>
+                          <label className={labelCls}>Company Size</label>
                           <select
-                            id="companySize"
                             name="companySize"
                             required
                             className={inputCls}
@@ -1172,13 +1264,9 @@ export default function App() {
                       </div>
                     </>
                   )}
-
                   <div>
-                    <label htmlFor="email" className={labelCls}>
-                      Email Address
-                    </label>
+                    <label className={labelCls}>Email Address</label>
                     <input
-                      id="email"
                       name="email"
                       type="email"
                       required
@@ -1188,11 +1276,9 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="password" className={labelCls}>
-                      Password
-                    </label>
+                    <label className={labelCls}>Password</label>
                     <input
-                      id="password"
+                      name="password"
                       type="password"
                       required
                       className={inputCls}
@@ -1202,20 +1288,26 @@ export default function App() {
                       }
                     />
                   </div>
-
                   <button
                     type="submit"
-                    className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all shadow-lg mt-2 flex items-center justify-center gap-2 group text-base`}
+                    disabled={authLoading}
+                    className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all shadow-lg mt-2 flex items-center justify-center gap-2 group text-base disabled:opacity-60`}
                   >
-                    {view === "signup"
-                      ? accountType === "business"
-                        ? "Create Business Account"
-                        : "Create Account"
-                      : "Sign In"}
-                    <ArrowRight
-                      size={18}
-                      className="group-hover:translate-x-1 transition-transform"
-                    />
+                    {authLoading ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <>
+                        {view === "signup"
+                          ? accountType === "business"
+                            ? "Create Business Account"
+                            : "Create Account"
+                          : "Sign In"}
+                        <ArrowRight
+                          size={18}
+                          className="group-hover:translate-x-1 transition-transform"
+                        />
+                      </>
+                    )}
                   </button>
                 </form>
 
@@ -1224,7 +1316,10 @@ export default function App() {
                     <>
                       Already have an account?{" "}
                       <button
-                        onClick={() => setView("signin")}
+                        onClick={() => {
+                          setView("signin");
+                          setAuthError("");
+                        }}
                         className={`${tk.accentText} font-semibold hover:underline`}
                       >
                         Sign in
@@ -1234,7 +1329,10 @@ export default function App() {
                     <>
                       Don't have an account?{" "}
                       <button
-                        onClick={() => setView("signup")}
+                        onClick={() => {
+                          setView("signup");
+                          setAuthError("");
+                        }}
                         className={`${tk.accentText} font-semibold hover:underline`}
                       >
                         Sign up
@@ -1246,7 +1344,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/*ONBOARDING*/}
+          {/* ══ ONBOARDING ══════════════════════════════════════════════════════ */}
           {view === "onboarding" && (
             <motion.div
               key="onboarding"
@@ -1320,14 +1418,14 @@ export default function App() {
                 </div>
                 <button
                   onClick={prevSlide}
-                  aria-label="Previous slide"
+                  aria-label="Previous"
                   className={`absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 w-10 h-10 ${tk.cardBg} rounded-full shadow-md border ${tk.border} flex items-center justify-center ${tk.subtleText} hover:${tk.accentText} transition-all z-10`}
                 >
                   <ChevronLeft size={20} />
                 </button>
                 <button
                   onClick={nextSlide}
-                  aria-label="Next slide"
+                  aria-label="Next"
                   className={`absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 w-10 h-10 ${tk.cardBg} rounded-full shadow-md border ${tk.border} flex items-center justify-center ${tk.subtleText} hover:${tk.accentText} transition-all z-10`}
                 >
                   <ChevronRight size={20} />
@@ -1338,18 +1436,14 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
                 onClick={() => setView("verification")}
-                className={`mt-8 px-7 py-3.5 ${
-                  isDark
-                    ? "bg-slate-200 text-slate-900 hover:bg-white"
-                    : "bg-slate-900 text-white hover:bg-slate-800"
-                } rounded-2xl font-bold transition-all flex items-center gap-2 text-sm`}
+                className={`mt-8 px-7 py-3.5 ${primaryBtn} rounded-2xl font-bold transition-all flex items-center gap-2 text-sm`}
               >
                 Get Started with WardrobeSuite <ArrowRight size={16} />
               </motion.button>
             </motion.div>
           )}
 
-          {/*VERIFICATION*/}
+          {/* ══ VERIFICATION ════════════════════════════════════════════════════ */}
           {view === "verification" && (
             <motion.div
               key="verification"
@@ -1367,36 +1461,31 @@ export default function App() {
                   <Mail size={32} />
                 </div>
                 <h2 className={`text-2xl font-bold ${tk.headingText} mb-3`}>
-                  Verify your Email
+                  Connect Gmail
                 </h2>
                 <p
                   className={`text-base ${tk.subtleText} mb-8 leading-relaxed`}
                 >
-                  We've sent a verification link to{" "}
-                  <span className={`font-semibold ${tk.headingText}`}>
-                    {user.email}
-                  </span>
-                  . Click the link to connect your account and start scanning.
+                  To scan your purchase receipts, WardrobeSuite needs read-only
+                  access to your Gmail. Click below to connect your account
+                  securely via Google OAuth.
                 </p>
                 <button
-                  onClick={() => {
-                    setIsVerified(true);
-                    startScanning();
-                  }}
+                  onClick={handleGmailConnect}
                   className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all flex items-center justify-center gap-2 text-base`}
                 >
-                  <CheckCircle size={20} /> I've Verified My Email
+                  <CheckCircle size={20} /> Connect Gmail & Start Scanning
                 </button>
                 <button
                   className={`mt-4 text-sm font-medium ${tk.mutedText} hover:${tk.accentText} transition-colors`}
                 >
-                  Resend verification link
+                  Skip for now
                 </button>
               </div>
             </motion.div>
           )}
 
-          {/*SCANNING*/}
+          {/* ══ SCANNING ════════════════════════════════════════════════════════ */}
           {view === "scanning" && (
             <motion.div
               key="scanning"
@@ -1486,7 +1575,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/*Item review swiping*/}
+          {/* ══ REVIEW ══════════════════════════════════════════════════════════ */}
           {view === "review" && (
             <motion.div
               key="review"
@@ -1502,7 +1591,7 @@ export default function App() {
                   Review Scanned Items
                 </h2>
                 <p className={`text-lg ${tk.subtleText}`}>
-                  Swipe right for clothing, left for everything else.
+                  Swipe right to add to wardrobe, left to skip.
                 </p>
               </div>
               <div className="relative w-full max-w-[300px] sm:max-w-[320px] aspect-[3/4]">
@@ -1533,8 +1622,11 @@ export default function App() {
                         className={`absolute inset-0 ${tk.swipeCard} rounded-3xl shadow-xl border overflow-hidden cursor-grab active:cursor-grabbing`}
                       >
                         <img
-                          src={item.image}
-                          alt={item.name}
+                          src={
+                            item.image_url ||
+                            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800"
+                          }
+                          alt={item.item_name}
                           className="w-full h-3/5 object-cover pointer-events-none"
                           referrerPolicy="no-referrer"
                         />
@@ -1542,12 +1634,38 @@ export default function App() {
                           <h3
                             className={`text-xl font-bold ${tk.headingText} mb-1`}
                           >
-                            {item.name}
+                            {item.item_name}
                           </h3>
-                          <p className={`font-bold text-xl ${tk.accentText}`}>
-                            ${item.price}
-                          </p>
-                          {item.isClothing && (
+                          {item.price_missing ? (
+                            <div className="mt-2">
+                              <p className={`text-xs ${tk.mutedText} mb-1`}>
+                                Price not found — enter manually:
+                              </p>
+                              <div className="relative">
+                                <span
+                                  className={`absolute left-3 top-1/2 -translate-y-1/2 font-bold ${tk.mutedText}`}
+                                >
+                                  $
+                                </span>
+                                <input
+                                  type="number"
+                                  value={manualPrice}
+                                  onChange={(e) =>
+                                    setManualPrice(e.target.value)
+                                  }
+                                  placeholder="0.00"
+                                  step="0.01"
+                                  min="0"
+                                  className={`w-full pl-7 pr-3 py-2 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-sm ${tk.inputText} focus:outline-none focus:ring-2 ${tk.inputFocus}`}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <p className={`font-bold text-xl ${tk.accentText}`}>
+                              ${((item.price_cents ?? 0) / 100).toFixed(2)}
+                            </p>
+                          )}
+                          {item.category && (
                             <span
                               className={`inline-block mt-2 px-3 py-1 ${tk.accentSubtle} ${tk.accentSubtleText} text-xs font-bold rounded-full uppercase tracking-wider`}
                             >
@@ -1558,27 +1676,53 @@ export default function App() {
                       </motion.div>
                     ))}
                 </AnimatePresence>
-                {reviewIndex >= itemsToReview.length && (
+
+                {/* All done */}
+                {reviewIndex >= itemsToReview.length &&
+                  itemsToReview.length > 0 && (
+                    <div
+                      className={`absolute inset-0 flex flex-col items-center justify-center text-center p-6 ${tk.surfaceBg} rounded-3xl border-2 border-dashed ${tk.border}`}
+                    >
+                      <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                        <CheckCircle size={26} />
+                      </div>
+                      <h3
+                        className={`text-xl font-bold ${tk.headingText} mb-1`}
+                      >
+                        All Done!
+                      </h3>
+                      <p className={`text-sm ${tk.subtleText} mb-6`}>
+                        You've reviewed all scanned items. Let's head to your
+                        dashboard!
+                      </p>
+                      <button
+                        onClick={() => setView(dashView)}
+                        className={`px-6 py-3 ${primaryBtn} rounded-2xl font-bold transition-all text-sm`}
+                      >
+                        Go to Dashboard
+                      </button>
+                    </div>
+                  )}
+
+                {/* Empty queue */}
+                {itemsToReview.length === 0 && (
                   <div
                     className={`absolute inset-0 flex flex-col items-center justify-center text-center p-6 ${tk.surfaceBg} rounded-3xl border-2 border-dashed ${tk.border}`}
                   >
-                    <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
-                      <CheckCircle size={26} />
+                    <div
+                      className={`w-14 h-14 ${tk.mutedBg} rounded-full flex items-center justify-center mb-4`}
+                    >
+                      <Mail size={26} className={tk.mutedText} />
                     </div>
                     <h3 className={`text-xl font-bold ${tk.headingText} mb-1`}>
-                      All Done!
+                      Nothing to Review
                     </h3>
                     <p className={`text-sm ${tk.subtleText} mb-6`}>
-                      You've reviewed all scanned items. Let's head to your
-                      dashboard!
+                      No new items were found in your Gmail receipts.
                     </p>
                     <button
-                      onClick={() => setView("consumer dashboard")}
-                      className={`px-6 py-3 ${
-                        isDark
-                          ? "bg-slate-200 text-slate-900 hover:bg-white"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
-                      } rounded-2xl font-bold transition-all text-sm`}
+                      onClick={() => setView(dashView)}
+                      className={`px-6 py-3 ${primaryBtn} rounded-2xl font-bold transition-all text-sm`}
                     >
                       Go to Dashboard
                     </button>
@@ -1586,19 +1730,25 @@ export default function App() {
                 )}
               </div>
 
-              {/* Tap buttons accessibility */}
+              {/* Tap buttons */}
               {reviewIndex < itemsToReview.length && (
                 <div className="flex gap-4 mt-6">
                   <button
                     onClick={() => handleSwipe("left")}
                     className={`px-7 py-3 ${tk.mutedBg} ${tk.bodyText} rounded-2xl font-bold text-sm hover:opacity-80 transition-all border ${tk.border}`}
-                    aria-label="Skip — not clothing"
+                    aria-label="Skip"
                   >
                     ✕ Skip
                   </button>
                   <button
                     onClick={() => handleSwipe("right")}
-                    className={`px-7 py-3 ${tk.accentBg} text-white rounded-2xl font-bold text-sm ${tk.accentHover} transition-all`}
+                    disabled={
+                      !!(
+                        itemsToReview[reviewIndex]?.price_missing &&
+                        !manualPrice
+                      )
+                    }
+                    className={`px-7 py-3 ${tk.accentBg} text-white rounded-2xl font-bold text-sm ${tk.accentHover} transition-all disabled:opacity-40`}
                     aria-label="Add to wardrobe"
                   >
                     ✓ Add
@@ -1624,16 +1774,16 @@ export default function App() {
                       </span>
                       <button
                         onClick={() => setShowSwipeTip(false)}
-                        aria-label="Dismiss tip"
+                        aria-label="Dismiss"
                         className="text-slate-400 hover:text-white"
                       >
                         <X size={16} />
                       </button>
                     </div>
                     <p className="text-sm text-slate-300 leading-relaxed">
-                      Swipe{" "}
+                      Swipe or add{" "}
                       <span className="text-emerald-400 font-bold">RIGHT</span>{" "}
-                      on clothing. Swipe{" "}
+                      on clothing. Swipe or skip{" "}
                       <span className="text-red-400 font-bold">LEFT</span> on
                       others.
                     </p>
@@ -1643,7 +1793,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* DASHBOARD */}
+          {/* ══ CONSUMER DASHBOARD ══════════════════════════════════════════════ */}
           {view === "consumer dashboard" && (
             <motion.div
               key="consumer dashboard"
@@ -1657,7 +1807,7 @@ export default function App() {
                   <h2
                     className={`text-2xl sm:text-3xl font-bold ${tk.headingText}`}
                   >
-                    Hi, {user.firstName || "there"} 👋
+                    Hi, {user.firstName || "there"}!
                   </h2>
                   <p className={`text-base ${tk.subtleText} mt-0.5`}>
                     Your smart wardrobe is ready to go!
@@ -1737,7 +1887,6 @@ export default function App() {
                       Based on recent reviews
                     </p>
                   </div>
-
                   <div
                     className={`p-4 sm:p-5 ${tk.cardBg} rounded-2xl border ${tk.border} shadow-sm flex flex-col justify-center`}
                   >
@@ -1755,7 +1904,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Recommendations carousel */}
+                {/* Recommendations */}
                 <div
                   className={`flex-1 ${tk.surfaceBg} rounded-3xl p-4 sm:p-6 flex flex-col min-h-0 border ${tk.border}`}
                 >
@@ -1833,11 +1982,7 @@ export default function App() {
                               </span>
                               <a
                                 href={item.link}
-                                className={`px-3 py-1.5 ${
-                                  isDark
-                                    ? "bg-slate-200 text-slate-900 hover:bg-white"
-                                    : "bg-slate-900 text-white hover:bg-slate-700"
-                                } rounded-lg transition-all text-xs font-bold flex items-center gap-1`}
+                                className={`px-3 py-1.5 ${primaryBtn} rounded-lg transition-all text-xs font-bold flex items-center gap-1`}
                               >
                                 Shop <ExternalLink size={10} />
                               </a>
@@ -1852,7 +1997,85 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* WARDROBE*/}
+          {/* ══ BUSINESS DASHBOARD ══════════════════════════════════════════════ */}
+          {view === "business dashboard" && (
+            <motion.div
+              key="business dashboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pt-20 sm:pt-24 pb-10 px-4 sm:px-6 max-w-screen-xl mx-auto flex-1 w-full"
+            >
+              <div className="mb-6">
+                <h2
+                  className={`text-2xl sm:text-3xl font-bold ${tk.headingText}`}
+                >
+                  Business Analytics
+                </h2>
+                <p className={`text-base ${tk.subtleText} mt-0.5`}>
+                  Insights from your scanned receipts
+                </p>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                {[
+                  {
+                    label: "Total Spend",
+                    value: `$${historicalSpend.toFixed(0)}`,
+                    sub: "All time",
+                  },
+                  {
+                    label: "Items Tracked",
+                    value: wardrobeItems.length,
+                    sub: "In wardrobe",
+                  },
+                  { label: "Avg. Purchase", value: "$65", sub: "Per item" },
+                  {
+                    label: "Top Merchant",
+                    value: "SHEIN",
+                    sub: "By frequency",
+                  },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className={`p-4 sm:p-5 ${tk.cardBg} rounded-2xl border ${tk.border} shadow-sm flex flex-col justify-center`}
+                  >
+                    <span
+                      className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-1 block`}
+                    >
+                      {stat.label}
+                    </span>
+                    <div
+                      className={`text-xl sm:text-2xl font-bold ${tk.headingText} mb-1`}
+                    >
+                      {stat.value}
+                    </div>
+                    <p className={`text-xs ${tk.mutedText}`}>{stat.sub}</p>
+                  </div>
+                ))}
+              </div>
+              <div
+                className={`${tk.surfaceBg} rounded-3xl p-6 border ${tk.border}`}
+              >
+                <h3
+                  className={`text-base sm:text-lg font-bold ${tk.headingText} mb-4`}
+                >
+                  Connect Gmail to Load Analytics
+                </h3>
+                <p className={`${tk.subtleText} mb-4`}>
+                  Run a scan to populate category breakdowns, merchant
+                  frequency, and spending trends.
+                </p>
+                <button
+                  onClick={() => startScanning()}
+                  className={`px-6 py-3 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all text-sm`}
+                >
+                  Run Scan
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ══ WARDROBE ════════════════════════════════════════════════════════ */}
           {view === "wardrobe" && (
             <motion.div
               key="wardrobe"
@@ -1861,7 +2084,6 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="pt-20 sm:pt-24 pb-10 px-4 sm:px-6 max-w-screen-xl mx-auto flex-1 w-full"
             >
-              {/* Page header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
                 <div>
                   <h2
@@ -1879,9 +2101,7 @@ export default function App() {
                   className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
                     outfitBuilderOpen
                       ? `${tk.skyBg} text-white ${tk.skyHover}`
-                      : isDark
-                      ? "bg-slate-200 text-slate-900 hover:bg-white"
-                      : "bg-slate-900 text-white hover:bg-slate-800"
+                      : primaryBtn
                   }`}
                 >
                   <Sparkles size={17} />
@@ -1896,11 +2116,10 @@ export default function App() {
                   outfitBuilderOpen ? "flex-col lg:flex-row" : "flex-col"
                 }`}
               >
-                {/* Items side */}
                 <div
                   className={outfitBuilderOpen ? "lg:flex-1 min-w-0" : "w-full"}
                 >
-                  {/* Search + Filter bar */}
+                  {/* Search + filter bar */}
                   <div className="mb-5 flex items-center gap-3">
                     <div className="relative flex-1 max-w-sm">
                       <Search
@@ -1912,21 +2131,17 @@ export default function App() {
                         placeholder="Search wardrobe…"
                         value={wardrobeSearch}
                         onChange={(e) => setWardrobeSearch(e.target.value)}
-                        aria-label="Search wardrobe"
-                        className={`w-full pl-10 pr-4 py-2.5 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-base ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`}
+                        className={`w-full pl-10 pr-4 py-2.5 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-base ${tk.inputFocus} ${tk.inputText} focus:outline-none focus:ring-2 transition-all`}
                       />
                     </div>
-
-                    {/* Filter button + panel */}
                     <div className="relative">
                       <button
                         onClick={() => setFilterOpen((o) => !o)}
                         aria-expanded={filterOpen}
-                        aria-haspopup="dialog"
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${
                           activeCategory !== "All"
                             ? `${tk.accentBg} text-white border-transparent`
-                            : `${tk.inputBg} ${tk.bodyText} ${tk.inputBorder} hover:border-teal-400`
+                            : `${tk.inputBg} ${tk.bodyText} ${tk.inputBorder} hover:border-indigo-400`
                         }`}
                       >
                         <Tag size={14} />
@@ -1944,13 +2159,10 @@ export default function App() {
                       <AnimatePresence>
                         {filterOpen && (
                           <>
-                            {/* Mobile backdrop */}
                             <div
                               className="fixed inset-0 bg-black/30 z-30 md:hidden"
                               onClick={() => setFilterOpen(false)}
-                              aria-hidden="true"
                             />
-
                             <motion.div
                               role="dialog"
                               aria-label="Filter wardrobe"
@@ -1958,17 +2170,11 @@ export default function App() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: 8 }}
                               transition={{ duration: 0.2 }}
-                              className={`
-                                fixed inset-x-0 bottom-0 z-40 ${tk.filterBg} rounded-t-3xl shadow-2xl p-5 max-h-[85vh] overflow-y-auto
-                                md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2
-                                md:w-72 md:rounded-2xl md:shadow-xl md:max-h-none md:overflow-visible border ${tk.border}
-                              `}
+                              className={`fixed inset-x-0 bottom-0 z-40 ${tk.filterBg} rounded-t-3xl shadow-2xl p-5 max-h-[85vh] overflow-y-auto md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-72 md:rounded-2xl md:shadow-xl md:max-h-none md:overflow-visible border ${tk.border}`}
                             >
-                              {/* Mobile drag handle */}
                               <div
                                 className={`w-10 h-1 ${tk.mutedBg} rounded-full mx-auto mb-5 md:hidden`}
                               />
-
                               <div className="flex justify-between items-center mb-4">
                                 <h3
                                   className={`text-base font-bold ${tk.headingText}`}
@@ -1977,13 +2183,12 @@ export default function App() {
                                 </h3>
                                 <button
                                   onClick={() => setFilterOpen(false)}
-                                  aria-label="Close filter"
-                                  className={`${tk.mutedText} hover:${tk.bodyText} p-1`}
+                                  aria-label="Close"
+                                  className={`${tk.mutedText} p-1`}
                                 >
                                   <X size={18} />
                                 </button>
                               </div>
-
                               <div className="space-y-2">
                                 <FilterSection
                                   title="Category"
@@ -2011,7 +2216,6 @@ export default function App() {
                                     ))}
                                   </div>
                                 </FilterSection>
-
                                 <FilterSection
                                   title="Season"
                                   isOpen={openSection === "season"}
@@ -2035,7 +2239,6 @@ export default function App() {
                                     )}
                                   </div>
                                 </FilterSection>
-
                                 <FilterSection
                                   title="Sleeve Length"
                                   isOpen={openSection === "sleeve"}
@@ -2059,7 +2262,6 @@ export default function App() {
                                     )}
                                   </div>
                                 </FilterSection>
-
                                 <FilterSection
                                   title="Color"
                                   isOpen={openSection === "color"}
@@ -2093,7 +2295,6 @@ export default function App() {
                                     ))}
                                   </div>
                                 </FilterSection>
-
                                 <FilterSection
                                   title="Fit"
                                   isOpen={openSection === "fit"}
@@ -2121,7 +2322,6 @@ export default function App() {
                                   </div>
                                 </FilterSection>
                               </div>
-
                               <div
                                 className={`mt-5 pt-4 border-t ${tk.border} flex justify-between items-center`}
                               >
@@ -2136,11 +2336,7 @@ export default function App() {
                                 </button>
                                 <button
                                   onClick={() => setFilterOpen(false)}
-                                  className={`px-5 py-2.5 ${
-                                    isDark
-                                      ? "bg-slate-200 text-slate-900 hover:bg-white"
-                                      : "bg-slate-900 text-white hover:bg-slate-800"
-                                  } rounded-xl text-sm font-bold transition-all`}
+                                  className={`px-5 py-2.5 ${primaryBtn} rounded-xl text-sm font-bold transition-all`}
                                 >
                                   Apply
                                 </button>
@@ -2152,7 +2348,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Items grid */}
+                  {/* Grid */}
                   {filteredWardrobe.length === 0 ? (
                     <div className={`py-20 text-center ${tk.mutedText}`}>
                       <Shirt size={44} className="mx-auto mb-3 opacity-30" />
@@ -2212,7 +2408,7 @@ export default function App() {
                               <p
                                 className={`text-sm font-bold ${tk.accentText} mt-1`}
                               >
-                                ${item.price}
+                                ${item.price.toFixed(2)}
                               </p>
                             </div>
                           </motion.div>
@@ -2222,7 +2418,7 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Outfit Builder panel */}
+                {/* Outfit builder panel */}
                 <AnimatePresence>
                   {outfitBuilderOpen && (
                     <motion.div
@@ -2247,7 +2443,6 @@ export default function App() {
                           </h3>
                         </div>
 
-                        {/* Outfit chips */}
                         <div className="flex gap-2 flex-wrap mb-4">
                           {outfits.map((outfit) => (
                             <button
@@ -2284,7 +2479,6 @@ export default function App() {
                           ))}
                         </div>
 
-                        {/* New outfit input or button */}
                         {isCreatingOutfit ? (
                           <div className="flex gap-2 mb-4">
                             <input
@@ -2322,7 +2516,6 @@ export default function App() {
                           </button>
                         )}
 
-                        {/* Active outfit items */}
                         {activeOutfit ? (
                           <div>
                             <div className="flex items-center justify-between mb-3">
@@ -2439,7 +2632,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* User profile */}
+          {/* ══ PROFILE ═════════════════════════════════════════════════════════ */}
           {view === "profile" && (
             <motion.div
               key="profile"
@@ -2453,13 +2646,18 @@ export default function App() {
               >
                 <div className="flex justify-between items-center mb-8">
                   <button
-                    onClick={() => setView("consumer dashboard")}
+                    onClick={() => setView(dashView)}
                     className={`text-sm font-bold ${tk.mutedText} hover:${tk.accentText} transition-colors flex items-center gap-1.5`}
                   >
                     <ChevronLeft size={16} /> Back to Dashboard
                   </button>
                   <button
-                    onClick={() => setView("landing")}
+                    onClick={() => {
+                      localStorage.removeItem("wardrobeUserId");
+                      setUserId("");
+                      setUser({ firstName: "", lastName: "", email: "" });
+                      setView("landing");
+                    }}
                     className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors"
                   >
                     Sign Out
@@ -2541,14 +2739,13 @@ export default function App() {
                             type="number"
                             defaultValue={budget || 500}
                             onChange={(e) => setBudget(Number(e.target.value))}
-                            aria-label="Monthly clothing budget in dollars"
                             className={`w-full pl-10 pr-4 py-3 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-xl font-bold ${tk.inputFocus} ${tk.inputText} focus:outline-none focus:ring-2 transition-all`}
                             placeholder="500"
                           />
                         </div>
                       </div>
                       <button
-                        onClick={() => setView("consumer dashboard")}
+                        onClick={() => setView(dashView)}
                         className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold text-base ${tk.accentHover} transition-all shadow-lg`}
                       >
                         Save Settings
@@ -2562,7 +2759,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* Footer*/}
+      {/* FOOTER */}
       <footer
         className={`py-6 border-t ${tk.border} px-4 sm:px-6 ${tk.pageBg} transition-colors duration-300`}
       >
