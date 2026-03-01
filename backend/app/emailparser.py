@@ -1,15 +1,18 @@
+"""
+emailparser.py
+
+Computes and upserts analytics from ReviewQueueItems into UserAnalytics.
+Called by scan.py after every scan.
+
+Signature: parse_json(user_id: str, db: Session)
+"""
+
 import json
 from sqlalchemy.orm import Session
 from app.models import ReviewQueueItem, UserAnalytics
 
 
-def parse_json(user_id: str, db: Session):
-    """
-    Reads all non-rejected ReviewQueueItems for this user and
-    computes/upserts aggregated analytics into UserAnalytics.
-    Called after every scan so the table stays current.
-    """
-
+def parse_json(user_id: str, db: Session) -> None:
     items = (
         db.query(ReviewQueueItem)
         .filter(
@@ -22,73 +25,55 @@ def parse_json(user_id: str, db: Session):
     if not items:
         return
 
-    purchase_amount_cents = 0
-    num_purchases = 0
-    merchant_freq_dict = {}
-    merchant_spending_dict = {}
-    category_freq_dict = {}
-    category_spending_dict = {}
+    total_cents = 0
+    count = 0
+    merchant_freq: dict = {}
+    merchant_spend: dict = {}
+    category_freq: dict = {}
+    category_spend: dict = {}
 
     for item in items:
         merchant = item.merchant or "Unknown"
         category = item.category or "Other"
-        price_cents = item.price_cents or 0
+        cents = item.price_cents or 0
 
-        merchant_freq_dict[merchant] = merchant_freq_dict.get(merchant, 0) + 1
-        category_freq_dict[category] = category_freq_dict.get(category, 0) + 1
-        merchant_spending_dict[merchant] = merchant_spending_dict.get(merchant, 0) + price_cents
-        category_spending_dict[category] = category_spending_dict.get(category, 0) + price_cents
+        merchant_freq[merchant] = merchant_freq.get(merchant, 0) + 1
+        category_freq[category] = category_freq.get(category, 0) + 1
+        merchant_spend[merchant] = merchant_spend.get(merchant, 0) + cents
+        category_spend[category] = category_spend.get(category, 0) + cents
 
-        num_purchases += 1
-        purchase_amount_cents += price_cents
+        count += 1
+        total_cents += cents
 
-    if num_purchases == 0:
+    if count == 0:
         return
 
-    average_purchase = purchase_amount_cents // num_purchases
+    avg = total_cents // count
+    top_merchant_freq    = max(merchant_freq, key=merchant_freq.get)
+    top_merchant_spend   = max(merchant_spend, key=merchant_spend.get)
+    top_category_freq    = max(category_freq, key=category_freq.get)
+    top_category_spend   = max(category_spend, key=category_spend.get)
 
-    frequent_merchant = max(merchant_freq_dict, key=merchant_freq_dict.get)
-    most_spent_merchant = max(merchant_spending_dict, key=merchant_spending_dict.get)
-    frequent_category = max(category_freq_dict, key=category_freq_dict.get)
-    most_spent_category = max(category_spending_dict, key=category_spending_dict.get)
+    row = db.query(UserAnalytics).filter(UserAnalytics.user_id == user_id).first()
 
-    existing = db.query(UserAnalytics).filter(UserAnalytics.user_id == user_id).first()
-
-    if existing is None:
-        row = UserAnalytics(
-            user_id=user_id,
-            total_spending_cents=purchase_amount_cents,
-            total_purchases=num_purchases,
-            average_purchase_cents=average_purchase,
-            frequent_merchant=frequent_merchant,
-            frequent_merchant_amount=merchant_freq_dict[frequent_merchant],
-            merchant_freq_json=json.dumps(merchant_freq_dict),
-            most_spent_merchant=most_spent_merchant,
-            most_spent_merchant_amount=merchant_spending_dict[most_spent_merchant],
-            merchant_spending_json=json.dumps(merchant_spending_dict),
-            frequent_category=frequent_category,
-            frequent_category_amount=category_freq_dict[frequent_category],
-            category_freq_json=json.dumps(category_freq_dict),
-            most_spent_category=most_spent_category,
-            most_spent_category_amount=category_spending_dict[most_spent_category],
-            category_spending_json=json.dumps(category_spending_dict),
-        )
+    if row is None:
+        row = UserAnalytics(user_id=user_id)
         db.add(row)
-    else:
-        existing.total_spending_cents = purchase_amount_cents
-        existing.total_purchases = num_purchases
-        existing.average_purchase_cents = average_purchase
-        existing.frequent_merchant = frequent_merchant
-        existing.frequent_merchant_amount = merchant_freq_dict[frequent_merchant]
-        existing.merchant_freq_json = json.dumps(merchant_freq_dict)
-        existing.most_spent_merchant = most_spent_merchant
-        existing.most_spent_merchant_amount = merchant_spending_dict[most_spent_merchant]
-        existing.merchant_spending_json = json.dumps(merchant_spending_dict)
-        existing.frequent_category = frequent_category
-        existing.frequent_category_amount = category_freq_dict[frequent_category]
-        existing.category_freq_json = json.dumps(category_freq_dict)
-        existing.most_spent_category = most_spent_category
-        existing.most_spent_category_amount = category_spending_dict[most_spent_category]
-        existing.category_spending_json = json.dumps(category_spending_dict)
+
+    row.total_spending_cents       = total_cents
+    row.total_purchases            = count
+    row.average_purchase_cents     = avg
+    row.frequent_merchant          = top_merchant_freq
+    row.frequent_merchant_amount   = merchant_freq[top_merchant_freq]
+    row.merchant_freq_json         = json.dumps(merchant_freq)
+    row.most_spent_merchant        = top_merchant_spend
+    row.most_spent_merchant_amount = merchant_spend[top_merchant_spend]
+    row.merchant_spending_json     = json.dumps(merchant_spend)
+    row.frequent_category          = top_category_freq
+    row.frequent_category_amount   = category_freq[top_category_freq]
+    row.category_freq_json         = json.dumps(category_freq)
+    row.most_spent_category        = top_category_spend
+    row.most_spent_category_amount = category_spend[top_category_spend]
+    row.category_spending_json     = json.dumps(category_spend)
 
     db.commit()
