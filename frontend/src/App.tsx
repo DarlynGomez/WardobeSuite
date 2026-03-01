@@ -80,33 +80,32 @@ const theme = {
     subtleBorder: "border-slate-100",
     // Header
     headerBg: "bg-white/85",
-    // Accent — teal (primary actions, links, highlights)
-    accentBg: "bg-teal-600",
-    accentHover: "hover:bg-teal-700",
-    accentText: "text-teal-600",
-    accentSubtle: "bg-teal-50",
-    accentSubtleText: "text-teal-700",
+    // Accent — black (primary actions, links, highlights)
+    accentBg: "bg-indigo-600",
+    accentHover: "hover:bg-indigo-700",
+    accentText: "text-indigo-600",
+    accentSubtle: "bg-indigo-50",
+    accentSubtleText: "text-indigo-700",
     // Secondary accent — sky (wardrobe / outfit builder)
-    skyBg: "bg-sky-600",
-    skyHover: "hover:bg-sky-700",
-    skyText: "text-sky-600",
-    skySubtle: "bg-sky-50",
-    skySubtleText: "text-sky-700",
+    skyBg: "bg-indigo-600",
+    skyHover: "hover:bg-indigo-700",
+    skyText: "text-indigo-600",
+    skySubtle: "bg-indigo-50",
+    skySubtleText: "text-indigo-700",
     // Inputs
     inputBg: "bg-slate-50",
     inputBorder: "border-slate-200",
-    inputFocus: "focus:border-teal-500 focus:ring-teal-500/20",
+    inputFocus: "focus:border-indigo-500 focus:ring-indigo-500/20",
     inputText: "text-slate-900",
     // Nav buttons
     navBtn: "bg-slate-100 text-slate-600 hover:bg-slate-200",
     // Filter panel
     filterBg: "bg-white",
-    filterItemHover: "hover:bg-teal-50 hover:text-teal-700",
-    filterActiveItem: "bg-teal-50 text-teal-700 font-semibold",
+    filterItemHover: "hover:bg-indigo-50 hover:text-indigo-700",
+    filterActiveItem: "bg-indigo-50 text-indigo-700 font-semibold",
     filterPillBg:
-      "bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-700",
+      "bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700",
     // Swipe card
-    //test
     swipeCard: "bg-white border-slate-200",
   },
   dark: {
@@ -121,26 +120,26 @@ const theme = {
     border: "border-slate-700",
     subtleBorder: "border-slate-700",
     headerBg: "bg-slate-900/90",
-    accentBg: "bg-teal-500",
-    accentHover: "hover:bg-teal-600",
-    accentText: "text-teal-400",
-    accentSubtle: "bg-teal-900/50",
-    accentSubtleText: "text-teal-300",
-    skyBg: "bg-sky-500",
-    skyHover: "hover:bg-sky-600",
-    skyText: "text-sky-400",
-    skySubtle: "bg-sky-900/50",
-    skySubtleText: "text-sky-300",
+    accentBg: "bg-indigo-500",
+    accentHover: "hover:bg-indigo-600",
+    accentText: "text-indigo-400",
+    accentSubtle: "bg-indigo-900/50",
+    accentSubtleText: "text-indigo-300",
+    skyBg: "bg-indigo-500",
+    skyHover: "hover:bg-indigo-600",
+    skyText: "text-indigo-400",
+    skySubtle: "bg-indigo-900/50",
+    skySubtleText: "text-indigo-300",
     inputBg: "bg-slate-700",
     inputBorder: "border-slate-600",
-    inputFocus: "focus:border-teal-400 focus:ring-teal-400/20",
+    inputFocus: "focus:border-indigo-400 focus:ring-indigo-400/20",
     inputText: "text-slate-100",
     navBtn: "bg-slate-700 text-slate-300 hover:bg-slate-600",
     filterBg: "bg-slate-800",
-    filterItemHover: "hover:bg-teal-900/40 hover:text-teal-300",
-    filterActiveItem: "bg-teal-900/50 text-teal-300 font-semibold",
+    filterItemHover: "hover:bg-indigo-900/40 hover:text-indigo-300",
+    filterActiveItem: "bg-indigo-900/50 text-indigo-300 font-semibold",
     filterPillBg:
-      "bg-slate-700 text-slate-300 hover:bg-teal-900/40 hover:text-teal-300",
+      "bg-slate-700 text-slate-300 hover:bg-indigo-900/40 hover:text-indigo-300",
     swipeCard: "bg-slate-800 border-slate-700",
   },
 };
@@ -606,7 +605,7 @@ export default function App() {
         (p - 1 + (recommendations.length - 4)) % (recommendations.length - 4),
     );
 
-  // Reusable class strings 
+  // Reusable class strings
   const inputCls = `w-full px-4 py-3 text-base ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`;
   const labelCls = `block text-xs font-bold uppercase tracking-wider ${tk.mutedText} mb-1.5`;
 
@@ -621,7 +620,7 @@ export default function App() {
     </button>
   );
 
-  // Render 
+  // Render
   return (
     <div
       className={`min-h-screen font-sans ${tk.pageBg} ${tk.bodyText} flex flex-col transition-colors duration-300`}
@@ -685,6 +684,10 @@ export default function App() {
                 <button
                   onClick={() => setView("signup")}
                   className={`px-5 py-2.5 ${tk.accentBg} text-white rounded-full text-sm font-semibold ${tk.accentHover} transition-all`}
+                  style={{
+                    backgroundColor: isDark ? "white" : "black",
+                    color: isDark ? "black" : "white",
+                  }}
                 >
                   Get Started
                 </button>
@@ -695,7 +698,9 @@ export default function App() {
 
           {/* App nav (dashboard / wardrobe / profile) */}
           <AnimatePresence>
-            {["consumer dashboard", "budget", "wardrobe", "profile"].includes(view) && (
+            {["consumer dashboard", "budget", "wardrobe", "profile"].includes(
+              view,
+            ) && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -798,10 +803,10 @@ export default function App() {
         </AnimatePresence>
       </header>
 
-      {/* ═══════════════════════════ MAIN ════════════════════════════════════ */}
+      {/*  MAIN */}
       <main className="flex-1 flex flex-col">
         <AnimatePresence mode="wait">
-          {/* ═══════════ LANDING ═══════════ */}
+          {/* LANDING */}
           {view === "landing" && (
             <motion.div
               key="landing"
@@ -866,7 +871,7 @@ export default function App() {
                         referrerPolicy="no-referrer"
                       />
                     </div>
-                    <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-teal-100 rounded-full blur-3xl -z-10 opacity-60" />
+                    <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-indigo-100 rounded-full blur-3xl -z-10 opacity-60" />
                     <div className="absolute -top-6 -right-6 w-48 h-48 bg-sky-100 rounded-full blur-3xl -z-10 opacity-60" />
                   </motion.div>
                 </div>
@@ -1390,7 +1395,7 @@ export default function App() {
                           },
                           opacity: { duration: 0.3 },
                         }}
-                        className={`absolute inset-0 border-4 ${isDark ? "border-teal-900 border-t-teal-400" : "border-teal-100 border-t-teal-600"} rounded-full`}
+                        className={`absolute inset-0 border-4 ${isDark ? "border-indigo-900 border-t-indigo-400" : "border-indigo-100 border-t-indigo-600"} rounded-full`}
                       />
                     )}
                   </AnimatePresence>
@@ -1573,7 +1578,7 @@ export default function App() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className={`fixed bottom-10 left-1/2 -translate-x-1/2 max-w-[400px] w-[calc(100%-2rem)] ${isDark ? "bg-slate-700" : "bg-slate-900"} text-white p-4 rounded-2xl shadow-xl z-50`}
+                    className={`fixed center left-1/2 -translate-x-1/2 max-w-[400px] w-[calc(100%-2rem)] ${isDark ? "bg-slate-700" : "bg-slate-900"} text-white p-4 rounded-2xl shadow-xl z-50`}
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span
@@ -1590,9 +1595,9 @@ export default function App() {
                       </button>
                     </div>
                     <p className="text-sm text-slate-300 leading-relaxed">
-                      Swipe{" "}
+                      Swipe or add{" "}
                       <span className="text-emerald-400 font-bold">RIGHT</span>{" "}
-                      on clothing. Swipe{" "}
+                      on clothing. Swipe or skip{" "}
                       <span className="text-red-400 font-bold">LEFT</span> on
                       others.
                     </p>
@@ -1616,7 +1621,7 @@ export default function App() {
                   <h2
                     className={`text-2xl sm:text-3xl font-bold ${tk.headingText}`}
                   >
-                    Hi, {user.firstName || "there"} 👋
+                    Hi, {user.firstName || "there"}!
                   </h2>
                   <p className={`text-base ${tk.subtleText} mt-0.5`}>
                     Your smart wardrobe is ready to go!
@@ -1871,7 +1876,7 @@ export default function App() {
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${
                           activeCategory !== "All"
                             ? `${tk.accentBg} text-white border-transparent`
-                            : `${tk.inputBg} ${tk.bodyText} ${tk.inputBorder} hover:border-teal-400`
+                            : `${tk.inputBg} ${tk.bodyText} ${tk.inputBorder} hover:border-indigo-400`
                         }`}
                       >
                         <Tag size={14} />
@@ -2194,7 +2199,7 @@ export default function App() {
                                     : outfit.id,
                                 )
                               }
-                              className={`px-3 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${activeOutfitId === outfit.id ? `${tk.skyBg} text-white` : `${tk.cardBg} border ${tk.border} ${tk.bodyText} hover:border-sky-400`}`}
+                              className={`px-3 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${activeOutfitId === outfit.id ? `${tk.skyBg} text-white` : `${tk.cardBg} border ${tk.border} ${tk.bodyText} hover:border-indigo-400`}`}
                             >
                               {outfit.name}
                               <button
