@@ -1,15 +1,3 @@
-# app/routers/review.py
-#
-# WHY THIS FILE: The frontend shows the user each ReviewQueueItem as a card
-# and lets them approve or reject it. These three endpoints handle that flow:
-#
-# GET  /review-items              — returns all pending items for this user
-# POST /review-items/{id}/approve — moves the item to the Items (wardrobe) table
-# POST /review-items/{id}/reject  — marks the item as rejected (stays in queue)
-#
-# The approve endpoint is the most important: it creates the Items row that
-# Developer 2's analytics and Developer 3's wardrobe view will read from.
-
 from typing import Optional
 from datetime import datetime
 
@@ -22,8 +10,6 @@ from app.models import User, ReviewQueueItem, Item
 
 router = APIRouter()
 
-
-# ── Auth dependency (same pattern as scan.py) ─────────────────────────────────
 
 def get_current_user(
     x_user_id: str = Header(...),
@@ -43,9 +29,6 @@ def get_current_user(
         )
     return user
 
-
-# ── Request schemas ───────────────────────────────────────────────────────────
-
 class ApproveRequest(BaseModel):
     """
     Optional body for the approve endpoint.
@@ -58,9 +41,6 @@ class ApproveRequest(BaseModel):
     edited_price_cents: Optional[int] = None
     # Override the category if Gemini categorized it wrong
     edited_category: Optional[str] = None
-
-
-# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/review-items")
 def list_review_items(
@@ -82,13 +62,11 @@ def list_review_items(
             ReviewQueueItem.user_id == user.id,
             ReviewQueueItem.status == "pending",
         )
-        .order_by(ReviewQueueItem.created_at.desc())  # newest first
+        .order_by(ReviewQueueItem.created_at.desc()) # newest first
         .all()
     )
 
-    # Serialize to dicts manually.
-    # WHY NOT response_model: For hackathon speed, manual serialization is
-    # simpler than setting up a full Pydantic response model with all fields.
+    # Serialize to dicts manually
     return [
         {
             "id": item.id,
@@ -98,7 +76,8 @@ def list_review_items(
             "item_name": item.item_name,
             "category": item.category,
             "price_cents": item.price_cents,
-            "price_missing": item.price_cents is None,  # ADD THIS LINE
+            "size": item.size,
+            "price_missing": item.price_cents is None,
             "currency": item.currency,
             "purchased_at": item.purchased_at.isoformat() if item.purchased_at else None,
             "image_url": item.image_url,
@@ -155,9 +134,6 @@ def approve_review_item(
         else queue_item.price_cents
     )
 
-    # ENFORCEMENT: price_cents is required in the Items table (NOT NULL).
-    # If Gemini couldn't find the price AND the frontend didn't provide it,
-    # we cannot approve — the frontend must collect the price from the user first.
     if final_price_cents is None:
         raise HTTPException(
             status_code=422,

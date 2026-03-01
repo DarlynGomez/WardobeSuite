@@ -54,10 +54,10 @@ def health_check():
 # Register the auth router.
 # prefix="/auth" means all routes in auth.py are available at /auth/...
 # tags=["auth"] groups them together in the /docs UI
-from app.routers import auth, scan
+
+
+from app.routers import auth, scan, review
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(scan.router, prefix="/scan", tags=["scan"])
-
-# NOTE: We will add review router in the next milestone:
-# from app.routers import review
-# app.include_router(review.router, tags=["review"])
+app.include_router(review.router, tags=["review"])
+# review has no prefix because its routes start with /review-items directly

@@ -1,20 +1,24 @@
 # app/gmail_client.py
 #
-# WHY THIS FILE: The Gmail API requires authentication and has a specific
-# structure for messages (base64-encoded, multipart MIME). This file handles
-# all of that complexity and gives the scan routes a simple interface:
+# WHY THIS FILE: Handles all Gmail API complexity — authentication,
+# fetching emails, and extracting structured content from MIME payloads.
 #
-#   service = get_gmail_service(user.refresh_token)
-#   emails = fetch_emails(service, "2024/10/01", max_results=50)
+# KEY CHANGES FROM V1:
+# - Now extracts BOTH plain text AND HTML from emails
+# - Parses HTML with BeautifulSoup to find prices and image URLs
+# - Returns a richer dict so Gemini has much more to work with
 #
-# Each email in the returned list has: message_id, thread_id, subject,
-# snippet, body (plain text), and date_str.
+# Add beautifulsoup4 and lxml to requirements.txt:
+#   beautifulsoup4==4.12.3
+#   lxml==5.3.0
 
 import os
+import re
 import base64
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,133 +30,234 @@ def get_gmail_service(refresh_token: str):
     """
     Builds an authenticated Gmail API client using a stored refresh token.
 
-    WHY: The access token (short-lived, 1hr) expires. But we have the
-    refresh_token (long-lived). We create a Credentials object with just
-    the refresh_token, and Google's library automatically exchanges it for
-    a fresh access_token when we make our first API call. We never need
-    to bother the user for login again.
-
-    Args:
-        refresh_token: The string stored in users.refresh_token in the DB
-
-    Returns:
-        A Gmail API service object ready to make API calls
+    Google's library automatically exchanges the refresh_token for a fresh
+    access_token on the first API call — we never ask the user to log in again.
     """
     credentials = Credentials(
-        token=None,             # No access token yet — we'll get one from refresh
+        token=None,
         refresh_token=refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
         client_id=os.getenv("GOOGLE_CLIENT_ID"),
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=SCOPES,
     )
-
-    # This line triggers the token refresh. It makes a POST request to Google's
-    # token endpoint and fills in credentials.token with a fresh access_token.
     credentials.refresh(Request())
-
-    # Build returns a "Resource" object for the Gmail API version 1.
-    # All subsequent API calls go through this object.
     return build("gmail", "v1", credentials=credentials)
 
 
 def _decode_base64(data: str) -> str:
     """
-    Decodes a Gmail base64url-encoded string to plain text.
+    Decodes Gmail's base64url encoding to a UTF-8 string.
 
-    WHY base64url: Gmail encodes message content in base64url (a URL-safe
-    variant of base64 that uses - and _ instead of + and /). Python's
-    base64 library can decode it, but we must pad it first — Google omits
-    the = padding characters that base64 normally requires.
-
-    errors="replace" means any bytes that can't be decoded as UTF-8 are
-    replaced with the Unicode replacement character (?) instead of crashing.
+    Gmail uses base64url (- and _ instead of + and /) and strips padding.
+    We re-add the padding before decoding.
+    errors="replace" prevents crashes on malformed bytes.
     """
-    # Add padding: base64 strings must have length divisible by 4
     padded = data + "==" * (4 - len(data) % 4)
     decoded_bytes = base64.urlsafe_b64decode(padded)
     return decoded_bytes.decode("utf-8", errors="replace")
 
 
-def _extract_body_from_payload(payload: dict) -> str:
+def _extract_parts(payload: dict) -> tuple[str, str]:
     """
-    Recursively extracts plain text from a Gmail message payload.
+    Recursively walks a Gmail MIME payload and returns (plain_text, html_text).
 
-    WHY RECURSIVE: Gmail messages can be multipart — they contain multiple
-    "parts" nested inside each other (e.g., text/plain + text/html inside
-    a multipart/alternative, which is itself inside a multipart/mixed).
-    We recursively search all parts until we find text/plain content.
+    WHY BOTH: Plain text is clean and easy to read. HTML contains prices in
+    table cells and product image URLs that plain text strips out. We need
+    both to give Gemini the best chance of finding price and image data.
 
-    WHY PLAIN TEXT NOT HTML: We send email content to Gemini for extraction.
-    HTML includes a lot of noise (CSS, navigation menus, unsubscribe links).
-    Plain text is cleaner and uses fewer tokens, making Gemini more reliable.
+    Gmail MIME structure example:
+        multipart/mixed
+        └── multipart/alternative
+            ├── text/plain   ← we want this
+            └── text/html    ← and this
 
-    Returns the first text/plain content found, capped at 4000 characters.
-    4000 chars is enough to capture any receipt without wasting Gemini tokens.
+    We recursively descend until we find the leaf parts.
     """
+    plain = ""
+    html = ""
     mime_type = payload.get("mimeType", "")
 
-    # Base case: this payload part is plain text
     if mime_type == "text/plain":
-        body_data = payload.get("body", {}).get("data", "")
-        if body_data:
-            return _decode_base64(body_data)[:4000]
+        data = payload.get("body", {}).get("data", "")
+        if data:
+            plain = _decode_base64(data)
 
-    # Recursive case: this payload has sub-parts
+    elif mime_type == "text/html":
+        data = payload.get("body", {}).get("data", "")
+        if data:
+            html = _decode_base64(data)
+
+    # Recurse into sub-parts for multipart/* types
     for part in payload.get("parts", []):
-        result = _extract_body_from_payload(part)
-        if result:
-            return result
+        sub_plain, sub_html = _extract_parts(part)
+        if sub_plain and not plain:
+            plain = sub_plain
+        if sub_html and not html:
+            html = sub_html
 
-    # Fallback: no text/plain found in any part
-    return ""
+    return plain, html
+
+
+def _extract_prices_from_html(html: str) -> list[float]:
+    """
+    Finds all dollar amounts in an HTML email body.
+
+    WHY: SHEIN, Quince, and most retail emails put prices in HTML table
+    cells that don't appear in the plain text version. We scrape them here
+    and pass them to Gemini as context so it can match items to prices.
+
+    Returns a list of floats, e.g. [12.99, 24.99, 5.00]
+    Deduplicates and sorts ascending.
+    """
+    # Strip HTML tags to get plain text for regex matching
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text(separator=" ")
+
+    # Match patterns like: $12.99  $1,234.56  USD 45.00  45.00 USD
+    price_pattern = re.compile(
+        r"""
+        (?:
+            \$\s*[\d,]+\.?\d*       # $12.99 or $1,234.56
+            |
+            USD\s*[\d,]+\.?\d*      # USD 12.99
+            |
+            [\d,]+\.?\d*\s*USD      # 12.99 USD
+        )
+        """,
+        re.VERBOSE,
+    )
+
+    prices = []
+    for match in price_pattern.finditer(text):
+        raw = match.group()
+        # Strip currency symbols and whitespace, keep digits and decimal
+        numeric = re.sub(r"[^\d.]", "", raw.replace(",", ""))
+        try:
+            val = float(numeric)
+            # Filter out nonsense values: prices between $0.50 and $2000
+            if 0.5 <= val <= 2000:
+                prices.append(val)
+        except ValueError:
+            pass
+
+    # Deduplicate and sort
+    return sorted(set(prices))
+
+
+def _extract_images_from_html(html: str) -> list[str]:
+    """
+    Finds product image URLs in an HTML email body.
+
+    WHY: Retail emails embed product thumbnails as <img> tags in the HTML.
+    Gemini can't see images directly, but we can pass the URLs so the
+    frontend can display the correct product image on the review card.
+
+    We filter aggressively because emails contain many non-product images:
+    - Logos, spacers, tracking pixels (usually tiny, under 10px)
+    - Social media icons
+    - Unsubscribe footer images
+
+    We keep only https:// URLs that look like product images based on
+    common CDN patterns from major retailers.
+    """
+    if not html:
+        return []
+
+    soup = BeautifulSoup(html, "lxml")
+    images = []
+
+    for img in soup.find_all("img"):
+        src = img.get("src", "")
+
+        # Must be an https URL
+        if not src.startswith("https://"):
+            continue
+
+        # Skip tracking pixels and tiny images
+        # Many emails use 1x1 transparent GIFs for open tracking
+        width = img.get("width", "")
+        height = img.get("height", "")
+        try:
+            if width and int(width) < 50:
+                continue
+            if height and int(height) < 50:
+                continue
+        except (ValueError, TypeError):
+            pass
+
+        # Skip common non-product image patterns
+        skip_patterns = [
+            "logo", "icon", "pixel", "track", "spacer",
+            "badge", "social", "facebook", "instagram", "twitter",
+            "unsubscribe", "footer", "header-img",
+        ]
+        src_lower = src.lower()
+        if any(p in src_lower for p in skip_patterns):
+            continue
+
+        images.append(src)
+
+        # Cap at 5 images per email — we only need the first few product images
+        if len(images) >= 5:
+            break
+
+    return images
+
+
+def _html_to_clean_text(html: str) -> str:
+    """
+    Converts HTML to clean readable text for Gemini.
+
+    WHY: Even though we extract prices and images separately, we also want
+    Gemini to read a clean text version of the HTML (not raw tags). BeautifulSoup
+    strips all tags and gives us the readable content, which includes item names,
+    descriptions, and any prices that weren't caught by the regex.
+
+    Capped at 5000 chars. HTML emails can be huge; Gemini doesn't need all of it.
+    """
+    if not html:
+        return ""
+    soup = BeautifulSoup(html, "lxml")
+    # separator=" " puts spaces between elements so words don't get concatenated
+    text = soup.get_text(separator=" ")
+    # Collapse multiple whitespace/newlines into single spaces
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:5000]
 
 
 def fetch_emails(service, after_date_str: str, max_results: int = 50) -> list[dict]:
     """
-    Fetches emails that match purchase-related keywords after a given date.
+    Fetches purchase-related emails after a given date.
 
     Args:
-        service: Authenticated Gmail API service from get_gmail_service()
-        after_date_str: Date string in format "YYYY/MM/DD", e.g. "2024/10/01"
-        max_results: Maximum number of messages to fetch (default 50 for MVP)
+        service:         Authenticated Gmail service from get_gmail_service()
+        after_date_str:  "YYYY/MM/DD" format, e.g. "2024/10/01"
+        max_results:     Max messages to fetch (50 for MVP)
 
-    Returns:
-        List of dicts, each with:
-            message_id  - Gmail's unique ID for this message
-            thread_id   - Gmail's thread (conversation) ID
-            subject     - Email subject line
-            snippet     - Gmail's auto-generated short preview text
-            body        - Extracted plain text of the email body (capped at 4000 chars)
-            date_str    - Date header from the email
-
-    WHY KEYWORD FILTER: We only want purchase-related emails. Using Gmail's
-    search query (q) to filter by keywords before we fetch means we don't
-    waste time or Gemini API calls on newsletters, personal emails, etc.
-    The keywords are OR'd together — any match is enough.
-
-    WHY MAX 50: The initial scan could match hundreds of emails. Fetching
-    each one is a separate API call. 50 is a reasonable limit that keeps the
-    scan fast (under 30 seconds) for a hackathon demo.
+    Returns a list of dicts, each with:
+        message_id      Gmail's unique message ID (used for deduplication)
+        thread_id       Gmail thread ID
+        subject         Subject line
+        snippet         Gmail's 200-char auto-preview
+        plain_text      Extracted plain text body (up to 4000 chars)
+        html_text       Cleaned text extracted from HTML (up to 5000 chars)
+        prices_found    List of dollar amounts found in the email, e.g. [29.99, 45.00]
+        image_urls      List of product image URLs found in the email HTML
+        date_str        Date header from the email
     """
     # Gmail search query — same syntax as the Gmail search box
-    # "after:YYYY/MM/DD" filters to emails after that date
-    # The keyword list matches common receipt/order email vocabulary
     query = (
         f"after:{after_date_str} "
         "(order OR receipt OR shipped OR confirmation OR invoice OR purchase OR delivery)"
     )
 
-    # List matching message IDs.
-    # messages.list returns only IDs and thread IDs — not message content.
-    # We need a second API call (messages.get) to fetch each message's content.
     result = service.users().messages().list(
         userId="me",
         q=query,
         maxResults=max_results,
     ).execute()
 
-    # If no matching messages, return empty list immediately
     message_refs = result.get("messages", [])
     if not message_refs:
         return []
@@ -161,17 +266,13 @@ def fetch_emails(service, after_date_str: str, max_results: int = 50) -> list[di
     for ref in message_refs:
         msg_id = ref["id"]
 
-        # Fetch the full message content.
-        # format="full" returns the complete MIME structure including all parts.
-        # This is a separate API call per message — this is why we cap at 50.
+        # format="full" returns the complete MIME tree including all nested parts
         msg = service.users().messages().get(
             userId="me",
             id=msg_id,
             format="full",
         ).execute()
 
-        # Gmail headers are a flat list of {"name": "Subject", "value": "..."} dicts.
-        # We convert to a dict for easy lookup.
         headers = {
             h["name"]: h["value"]
             for h in msg.get("payload", {}).get("headers", [])
@@ -180,21 +281,28 @@ def fetch_emails(service, after_date_str: str, max_results: int = 50) -> list[di
         subject = headers.get("Subject", "")
         date_str = headers.get("Date", "")
 
-        # Extract plain text body from the MIME structure
-        body = _extract_body_from_payload(msg.get("payload", {}))
+        # Extract both plain text and HTML from the MIME tree
+        plain_text, html_raw = _extract_parts(msg.get("payload", {}))
 
-        # If we couldn't extract a body, fall back to Gmail's snippet.
-        # The snippet is Gmail's auto-generated 200-character preview — not ideal,
-        # but better than sending Gemini nothing.
-        if not body:
-            body = msg.get("snippet", "")
+        # Clean up the plain text
+        plain_text = plain_text[:4000] if plain_text else msg.get("snippet", "")
+
+        # Convert raw HTML to readable text for Gemini
+        html_text = _html_to_clean_text(html_raw) if html_raw else ""
+
+        # Extract structured data from the HTML
+        prices_found = _extract_prices_from_html(html_raw) if html_raw else []
+        image_urls = _extract_images_from_html(html_raw) if html_raw else []
 
         emails.append({
             "message_id": msg_id,
             "thread_id": msg.get("threadId", ""),
             "subject": subject,
             "snippet": msg.get("snippet", ""),
-            "body": body,
+            "plain_text": plain_text,
+            "html_text": html_text,
+            "prices_found": prices_found,
+            "image_urls": image_urls,
             "date_str": date_str,
         })
 
