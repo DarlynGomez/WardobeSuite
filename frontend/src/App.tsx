@@ -448,30 +448,30 @@ export default function App() {
     {
       title: "Scan Your Digital Purchases",
       image:
-        "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
+        "Images/Scan.png",
       description:
         "WardrobeSuite securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits.",
     },
     {
-      title: "Set a Budget and Style Preferences",
+      title: "Set a Budget",
       image:
-        "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800",
+        "Images/Budget.png",
       description:
-        "Customize your experience by setting a monthly clothing budget and selecting your style preferences. WardrobeSuite learns from your choices to provide personalized recommendations.",
+        "Customize your experience by setting a monthly clothing budget. WardrobeSuite learns from your choices to provide personalized recommendations to fit your financial need.",
     },
     {
-      title: "Advanced Security",
+      title: "Create Outfits in Your Wardrobe",
       image:
-        "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800",
+        "Images/Outfits.png",
       description:
-        "Rest easy knowing your data is protected by enterprise-grade encryption and protocols.",
+        "Create and save custom outfit combinations from your wardrobe items. Easily build and manage your personal style collections.",
     },
     {
-      title: "Scalable Infrastructure",
+      title: "Filter Your Style",
       image:
-        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800",
+        "Images/Filter.png",
       description:
-        "Our platform grows with you, handling everything from your first user to your first million.",
+        "Filter between tops, bottoms, color, fit and more in your wardrobe to quickly find the perfect piece for any occasion. Spend less time searching and more time styling.",
     },
   ];
 
