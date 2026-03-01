@@ -1,10 +1,14 @@
 """
-emailparser.py
+app/emailparser.py
 
 Computes and upserts analytics from ReviewQueueItems into UserAnalytics.
 Called by scan.py after every scan.
 
 Signature: parse_json(user_id: str, db: Session)
+
+CHANGE FROM ORIGINAL: Now also writes first_purchase_at / last_purchase_at
+to UserAnalytics so the business KPI dashboard can compute churn risk
+and purchase velocity. No consumer logic was modified.
 """
 
 import json
@@ -32,6 +36,9 @@ def parse_json(user_id: str, db: Session) -> None:
     category_freq: dict = {}
     category_spend: dict = {}
 
+    # Track purchase timestamps for churn/velocity
+    purchase_dates = []
+
     for item in items:
         merchant = item.merchant or "Unknown"
         category = item.category or "Other"
@@ -45,6 +52,9 @@ def parse_json(user_id: str, db: Session) -> None:
         count += 1
         total_cents += cents
 
+        if item.purchased_at:
+            purchase_dates.append(item.purchased_at)
+
     if count == 0:
         return
 
@@ -53,6 +63,9 @@ def parse_json(user_id: str, db: Session) -> None:
     top_merchant_spend   = max(merchant_spend, key=merchant_spend.get)
     top_category_freq    = max(category_freq, key=category_freq.get)
     top_category_spend   = max(category_spend, key=category_spend.get)
+
+    first_purchase = min(purchase_dates) if purchase_dates else None
+    last_purchase  = max(purchase_dates) if purchase_dates else None
 
     row = db.query(UserAnalytics).filter(UserAnalytics.user_id == user_id).first()
 
@@ -75,5 +88,7 @@ def parse_json(user_id: str, db: Session) -> None:
     row.most_spent_category        = top_category_spend
     row.most_spent_category_amount = category_spend[top_category_spend]
     row.category_spending_json     = json.dumps(category_spend)
+    row.first_purchase_at          = first_purchase
+    row.last_purchase_at           = last_purchase
 
     db.commit()

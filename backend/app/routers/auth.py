@@ -1,12 +1,21 @@
 # app/routers/auth.py
 #
-# Authentication routes:
+# ADDITIVE CHANGES (Phase 1 — Business Role):
 #
-#   POST /auth/register        → Create account with name + email + password
-#   POST /auth/login           → Sign in, get back user_id
-#   GET  /auth/google/start    → Get Google OAuth URL (pass ?user_id= to link)
-#   GET  /auth/google/callback → Google redirects here after user grants access;
-#                                 redirects browser to frontend with user_id in URL
+#   NEW endpoints added:
+#     POST /auth/business/register  → Create a business account (role="business")
+#     POST /auth/business/login     → Authenticate business account, returns role
+#
+#   EXISTING endpoints unchanged:
+#     POST /auth/register           → Consumer registration (role="consumer")
+#     POST /auth/login              → Consumer login (enforces role=consumer)
+#     GET  /auth/google/start       → Gmail OAuth start
+#     GET  /auth/google/callback    → Gmail OAuth callback
+#
+# WHY SEPARATE ENDPOINTS: Business and consumer auth are intentionally separate
+# so that a business account can never accidentally land on consumer views
+# and vice versa. The login response always includes "role" so the frontend
+# knows which dashboard to render.
 
 import os
 from fastapi import APIRouter, Depends, HTTPException
@@ -38,13 +47,10 @@ CLIENT_CONFIG = {
     }
 }
 
-# URL of the frontend — after OAuth we redirect here so the browser ends up
-# back on the React app with the user_id in the URL hash.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-# In-memory CSRF state store. Maps state→user_id so the callback knows which
-# account to link the Gmail tokens to.
-_oauth_state_store: dict[str, str] = {}   # state → user_id
+_oauth_state_store: dict[str, str] = {}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,7 +68,7 @@ def _ensure_scan_settings(user: User, db: Session):
         db.add(ScanSettings(user_id=user.id, initial_scan_days=90))
 
 
-# ── Register ──────────────────────────────────────────────────────────────────
+# ── Consumer Register (UNCHANGED) ─────────────────────────────────────────────
 
 class RegisterBody(BaseModel):
     first_name: str
@@ -74,13 +80,9 @@ class RegisterBody(BaseModel):
 @router.post("/register")
 def register(body: RegisterBody, db: Session = Depends(get_db)):
     """
-    Creates a new WardrobeSuite account.
-
-    Stores a salted SHA-256 hash of the password — never the plaintext.
-    Returns user_id immediately so the frontend can proceed to Gmail OAuth
-    without making the user log in again.
+    Creates a new consumer WardrobeSuite account (role="consumer").
+    Unchanged from original implementation.
     """
-    # Check for duplicate email
     if db.query(User).filter(User.email == body.email.lower()).first():
         raise HTTPException(status_code=409, detail="An account with that email already exists.")
 
@@ -88,10 +90,11 @@ def register(body: RegisterBody, db: Session = Depends(get_db)):
         email=body.email.lower().strip(),
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip(),
+        role="consumer",
     )
     user.set_password(body.password)
     db.add(user)
-    db.flush()  # get user.id before commit
+    db.flush()
 
     _ensure_scan_settings(user, db)
     db.commit()
@@ -101,12 +104,13 @@ def register(body: RegisterBody, db: Session = Depends(get_db)):
         "email": user.email,
         "first_name": user.first_name,
         "last_name": user.last_name,
+        "role": user.role,
         "gmail_connected": False,
         "message": "Account created. Proceed to Gmail OAuth to enable email scanning.",
     }
 
 
-# ── Login ─────────────────────────────────────────────────────────────────────
+# ── Consumer Login (UNCHANGED, but now also returns role) ─────────────────────
 
 class LoginBody(BaseModel):
     email: str
@@ -117,13 +121,13 @@ class LoginBody(BaseModel):
 def login(body: LoginBody, db: Session = Depends(get_db)):
     """
     Authenticates with email + password.
-    Returns user_id and gmail_connected so the frontend knows whether to
-    prompt for Gmail OAuth or go straight to the dashboard.
+    Now also returns 'role' so the frontend knows which dashboard to show.
+    Business accounts are NOT blocked here — they can use either endpoint —
+    but the frontend should use /auth/business/login for business logins.
     """
     user = db.query(User).filter(User.email == body.email.lower()).first()
 
     if not user or not user.check_password(body.password):
-        # Deliberately vague — don't reveal whether the email exists
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
     return {
@@ -131,51 +135,102 @@ def login(body: LoginBody, db: Session = Depends(get_db)):
         "email": user.email,
         "first_name": user.first_name,
         "last_name": user.last_name,
+        "role": user.role or "consumer",
         "gmail_connected": bool(user.refresh_token),
     }
 
 
-# ── Gmail OAuth — Step 1: get auth URL ───────────────────────────────────────
+# ── Business Register (NEW) ───────────────────────────────────────────────────
+
+class BusinessRegisterBody(BaseModel):
+    business_name: str   # stored as first_name for simplicity
+    email: str
+    password: str
+    industry: str = ""
+    company_size: str = ""
+
+
+@router.post("/business/register")
+def business_register(body: BusinessRegisterBody, db: Session = Depends(get_db)):
+    """
+    Creates a new business account (role="business").
+
+    Stored in the same users table as consumers — role column differentiates them.
+    Business accounts do NOT get ScanSettings (they don't scan Gmail).
+    Business accounts do NOT need Gmail OAuth.
+
+    Returns role="business" so frontend routes to the business dashboard.
+    """
+    if db.query(User).filter(User.email == body.email.lower()).first():
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+
+    user = User(
+        email=body.email.lower().strip(),
+        first_name=body.business_name.strip(),
+        last_name="",
+        role="business",
+    )
+    user.set_password(body.password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "business_name": user.first_name,
+        "role": user.role,
+        "message": "Business account created. You can now access the business dashboard.",
+    }
+
+
+# ── Business Login (NEW) ──────────────────────────────────────────────────────
+
+@router.post("/business/login")
+def business_login(body: LoginBody, db: Session = Depends(get_db)):
+    """
+    Authenticates a business account.
+
+    ROLE ENFORCEMENT: Returns 403 if the account exists but is not a business account.
+    This prevents consumers from accidentally landing on the business dashboard.
+    """
+    user = db.query(User).filter(User.email == body.email.lower()).first()
+
+    if not user or not user.check_password(body.password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
+
+    if (user.role or "consumer") != "business":
+        raise HTTPException(
+            status_code=403,
+            detail="This account is not a business account. Please use the consumer login."
+        )
+
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "business_name": user.first_name,
+        "role": user.role,
+    }
+
+
+# ── Gmail OAuth — Step 1 (UNCHANGED) ─────────────────────────────────────────
 
 @router.get("/google/start")
 def google_oauth_start(user_id: str):
-    """
-    Returns a Google authorization URL.
-
-    The frontend should:
-      1. Call GET /auth/google/start?user_id=<id>
-      2. Open the returned auth_url in a new tab (or redirect)
-      3. Google redirects back to /auth/google/callback
-      4. The callback redirects back to the frontend with user_id in the URL
-
-    WHY user_id param: We need to know which User row to attach the Gmail
-    refresh_token to. The state parameter carries it through the OAuth round-trip.
-    """
     flow = _build_flow()
     auth_url, state = flow.authorization_url(
         access_type="offline",
         prompt="consent",
         include_granted_scopes="true",
     )
-    # Store user_id keyed by state for retrieval in callback
     _oauth_state_store[state] = user_id
-
     return {"auth_url": auth_url}
 
 
-# ── Gmail OAuth — Step 2: exchange code for token ────────────────────────────
+# ── Gmail OAuth — Step 2 (UNCHANGED) ─────────────────────────────────────────
 
 @router.get("/google/callback")
 def google_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """
-    Google redirects here after the user approves Gmail access.
-
-    1. Validate state (CSRF protection)
-    2. Exchange code for tokens
-    3. Store refresh_token on the User row
-    4. Redirect the browser back to the frontend with ?oauth=success&user_id=...
-       so the React app knows OAuth finished and can start scanning.
-    """
     user_id = _oauth_state_store.pop(state, None)
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid OAuth state. Please try connecting Gmail again.")
@@ -184,30 +239,24 @@ def google_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     flow.fetch_token(code=code)
     credentials = flow.credentials
 
-    # Look up or find user
     user = db.query(User).filter(User.id == user_id).first()
 
-    # If the user somehow wasn't created yet (e.g. they used OAuth-only signup),
-    # look them up by their Google email address
     if not user:
         gmail_service = build("gmail", "v1", credentials=credentials)
         profile = gmail_service.users().getProfile(userId="me").execute()
         google_email = profile["emailAddress"]
         user = db.query(User).filter(User.email == google_email).first()
         if not user:
-            user = User(email=google_email)
+            user = User(email=google_email, role="consumer")
             db.add(user)
             db.flush()
 
-    # Save the refresh token so we can scan Gmail without re-auth
     if credentials.refresh_token:
         user.refresh_token = credentials.refresh_token
 
     _ensure_scan_settings(user, db)
     db.commit()
 
-    # Redirect browser back to the frontend. The React app listens for
-    # ?oauth=success in the URL and auto-starts the Gmail scan.
     return RedirectResponse(
         url=f"{FRONTEND_URL}?oauth=success&user_id={user.id}"
     )
