@@ -709,8 +709,8 @@ export default function App() {
                   <span className="hidden sm:inline">Wardrobe</span>
                 </button>
                 <button
-                  onClick={() => setView("consumerdashboard")}
-                  className={`px-3 sm:px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${view === "dashboard" ? (isDark ? "bg-slate-100 text-slate-900" : "bg-slate-900 text-white") : tk.navBtn}`}
+                  onClick={() => setView("consumer dashboard")}
+                  className={`px-3 sm:px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${view === "consumer dashboard" ? (isDark ? "bg-slate-100 text-slate-900" : "bg-slate-900 text-white") : tk.navBtn}`}
                   aria-label="Dashboard"
                 >
                   <span className="hidden sm:inline">Dashboard</span>
@@ -1537,7 +1537,7 @@ export default function App() {
                       dashboard!
                     </p>
                     <button
-                      onClick={() => setView("consumerdashboard")}
+                      onClick={() => setView("consumer dashboard")}
                       className={`px-6 py-3 ${isDark ? "bg-slate-200 text-slate-900 hover:bg-white" : "bg-slate-900 text-white hover:bg-slate-800"} rounded-2xl font-bold transition-all text-sm`}
                     >
                       Go to Dashboard
