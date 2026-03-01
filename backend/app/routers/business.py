@@ -197,17 +197,64 @@ def filter_options(
     db: Session = Depends(get_db),
 ):
     """
-    Returns all unique values for filter dropdowns in the business dashboard.
-    Frontend calls this once on mount to populate filter <select> elements.
+    Returns ALL unique merchants and categories across every consumer in the DB.
+
+    FIX: The original version only looked at the frequent_merchant and
+    frequent_category columns, which are the single top-1 value per consumer.
+    This caused dropdowns to only show one merchant/category per user.
+
+    The correct approach is to parse the full merchant_freq_json and
+    category_freq_json blobs, which contain the complete maps of every
+    merchant/category that consumer has purchased from. We union all keys
+    across all rows to get the complete set of options.
     """
     rows = db.query(UserAnalytics).all()
 
-    merchants = sorted(set(r.frequent_merchant for r in rows if r.frequent_merchant))
-    categories = sorted(set(r.frequent_category for r in rows if r.frequent_category))
+    all_merchants: set[str] = set()
+    all_categories: set[str] = set()
+
+    for r in rows:
+        # Parse the full merchant frequency map and collect ALL merchants
+        if r.merchant_freq_json:
+            try:
+                freq_map = json.loads(r.merchant_freq_json)
+                all_merchants.update(k for k in freq_map if k)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Parse the full merchant spending map as well (catches any extra merchants)
+        if r.merchant_spending_json:
+            try:
+                spend_map = json.loads(r.merchant_spending_json)
+                all_merchants.update(k for k in spend_map if k)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Fallback: also include the top-1 frequent_merchant in case JSON is missing
+        if r.frequent_merchant:
+            all_merchants.add(r.frequent_merchant)
+        if r.most_spent_merchant:
+            all_merchants.add(r.most_spent_merchant)
+
+        # Same pattern for categories
+        if r.category_freq_json:
+            try:
+                freq_map = json.loads(r.category_freq_json)
+                all_categories.update(k for k in freq_map if k)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if r.category_spending_json:
+            try:
+                spend_map = json.loads(r.category_spending_json)
+                all_categories.update(k for k in spend_map if k)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if r.frequent_category:
+            all_categories.add(r.frequent_category)
+        if r.most_spent_category:
+            all_categories.add(r.most_spent_category)
 
     return {
-        "merchants": merchants,
-        "categories": categories,
+        "merchants": sorted(all_merchants),
+        "categories": sorted(all_categories),
     }
 
 

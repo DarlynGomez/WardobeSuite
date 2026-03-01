@@ -34,6 +34,12 @@ import {
   Loader2,
   FileText,
   Zap,
+  Camera,
+  MessageCircle,
+  Upload,
+  Palette,
+  Send,
+  ImagePlus,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,7 +228,7 @@ function FilterSection({
   title: string;
   isOpen: boolean;
   onToggle: () => void;
-  children?: React.ReactNode;
+  children: React.ReactNode;
   tk: typeof theme.light;
 }) {
   return (
@@ -436,7 +442,7 @@ function InsightsModal({
         initial={{ scale: 0.94, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.94, y: 20 }}
-        className={`relative z-10 w-full max-w-3xl max-h-[85vh] flex flex-col ${tk.cardBg} rounded-3xl shadow-2xl border ${tk.border} overflow-hidden mt-20`}
+        className={`relative z-10 w-full max-w-3xl max-h-[85vh] flex flex-col ${tk.cardBg} rounded-3xl shadow-2xl border ${tk.border} overflow-hidden`}
       >
         {/* Header */}
         <div
@@ -548,6 +554,42 @@ export default function App() {
   // KPI state
   const [kpiData, setKpiData] = React.useState<KPIData | null>(null);
   const [kpiLoading, setKpiLoading] = React.useState(false);
+
+  // ── Color analysis state ────────────────────────────────────────────────────
+  const [colorAnalysisResult, setColorAnalysisResult] =
+    React.useState<any>(null);
+  const [colorAnalysisLoading, setColorAnalysisLoading] = React.useState(false);
+  const [colorAnalysisError, setColorAnalysisError] = React.useState("");
+  const [fullBodyPhoto, setFullBodyPhoto] = React.useState<File | null>(null);
+  const [facePhoto, setFacePhoto] = React.useState<File | null>(null);
+  const [fullBodyPreview, setFullBodyPreview] = React.useState<string>("");
+  const [facePreview, setFacePreview] = React.useState<string>("");
+
+  // ── AI Stylist chatbot state ────────────────────────────────────────────────
+  const [stylistMessages, setStylistMessages] = React.useState<
+    Array<{ role: "user" | "assistant"; content: string }>
+  >([]);
+  const [stylistInput, setStylistInput] = React.useState("");
+  const [stylistLoading, setStylistLoading] = React.useState(false);
+  const [stylistOpen, setStylistOpen] = React.useState(false);
+
+  // ── Manual wardrobe upload state ────────────────────────────────────────────
+  const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
+  const [uploadItemName, setUploadItemName] = React.useState("");
+  const [uploadCategory, setUploadCategory] = React.useState("Tops");
+  const [uploadPrice, setUploadPrice] = React.useState("");
+  const [uploadMerchant, setUploadMerchant] = React.useState("");
+  const [uploadPhoto, setUploadPhoto] = React.useState<File | null>(null);
+  const [uploadPhotoPreview, setUploadPhotoPreview] =
+    React.useState<string>("");
+  const [uploadLoading, setUploadLoading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState("");
+  const [uploadSuccess, setUploadSuccess] = React.useState("");
+
+  // ── Profile active tab ──────────────────────────────────────────────────────
+  const [profileTab, setProfileTab] = React.useState<
+    "info" | "color" | "stylist"
+  >("info");
 
   // ── Wardrobe & review state (unchanged) ────────────────────────────────────
   const [wardrobeItems, setWardrobeItems] = React.useState<WardrobeItem[]>([
@@ -1339,6 +1381,143 @@ export default function App() {
       (p) => (p - 1 + recommendations.length) % recommendations.length
     );
 
+  // ── Color analysis handler ──────────────────────────────────────────────────
+  const handleColorAnalysis = async () => {
+    if (!fullBodyPhoto || !facePhoto) {
+      setColorAnalysisError(
+        "Please upload both a full body photo and a close-up face photo."
+      );
+      return;
+    }
+    setColorAnalysisLoading(true);
+    setColorAnalysisError("");
+    setColorAnalysisResult(null);
+    const fd = new FormData();
+    fd.append("full_body_photo", fullBodyPhoto);
+    fd.append("face_photo", facePhoto);
+    try {
+      const res = await fetch(`${API}/profile/color-analysis`, {
+        method: "POST",
+        headers: { "X-User-Id": user.userId },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Analysis failed");
+      }
+      const data = await res.json();
+      setColorAnalysisResult(data);
+    } catch (e: any) {
+      setColorAnalysisError(
+        e.message ||
+          "Color analysis failed. Please try again with clearer photos."
+      );
+    } finally {
+      setColorAnalysisLoading(false);
+    }
+  };
+
+  // ── AI Stylist handler ──────────────────────────────────────────────────────
+  const handleStylistSend = async () => {
+    if (!stylistInput.trim()) return;
+    const newMsg = { role: "user" as const, content: stylistInput.trim() };
+    const updatedMsgs = [...stylistMessages, newMsg];
+    setStylistMessages(updatedMsgs);
+    setStylistInput("");
+    setStylistLoading(true);
+    try {
+      const res = await fetch(`${API}/profile/stylist`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": user.userId,
+        },
+        body: JSON.stringify({
+          messages: updatedMsgs,
+          color_season: colorAnalysisResult?.season || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Stylist error");
+      const data = await res.json();
+      setStylistMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply },
+      ]);
+    } catch {
+      setStylistMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Sorry, I couldn't connect right now. Make sure the backend is running!",
+        },
+      ]);
+    } finally {
+      setStylistLoading(false);
+    }
+  };
+
+  // ── Manual wardrobe upload handler ─────────────────────────────────────────
+  const handleManualUpload = async () => {
+    if (!uploadItemName.trim()) {
+      setUploadError("Please enter an item name.");
+      return;
+    }
+    if (!uploadPrice || parseFloat(uploadPrice) < 0) {
+      setUploadError("Please enter a valid price.");
+      return;
+    }
+    setUploadLoading(true);
+    setUploadError("");
+    setUploadSuccess("");
+    const fd = new FormData();
+    fd.append("item_name", uploadItemName.trim());
+    fd.append("category", uploadCategory);
+    fd.append("price_dollars", parseFloat(uploadPrice).toFixed(2));
+    if (uploadMerchant.trim()) fd.append("merchant", uploadMerchant.trim());
+    if (uploadPhoto) fd.append("photo", uploadPhoto);
+    try {
+      const res = await fetch(`${API}/profile/wardrobe/upload`, {
+        method: "POST",
+        headers: { "X-User-Id": user.userId },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Upload failed");
+      }
+      const data = await res.json();
+      // Add to local wardrobe immediately
+      setWardrobeItems((prev) => [
+        ...prev,
+        {
+          id: data.wardrobe_item_id,
+          name: data.item_name,
+          price: (data.price_cents || 0) / 100,
+          image:
+            data.image_url ||
+            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
+          category: data.category as any,
+        },
+      ]);
+      setUploadSuccess(`"${data.item_name}" added to your wardrobe!`);
+      // Reset form
+      setUploadItemName("");
+      setUploadPrice("");
+      setUploadMerchant("");
+      setUploadPhoto(null);
+      setUploadPhotoPreview("");
+      setTimeout(() => {
+        setUploadModalOpen(false);
+        setUploadSuccess("");
+      }, 2000);
+    } catch (e: any) {
+      setUploadError(e.message || "Upload failed. Please try again.");
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
   const inputCls = `w-full px-4 py-3 text-base ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`;
   const labelCls = `block text-xs font-bold uppercase tracking-wider ${tk.mutedText} mb-1.5`;
 
@@ -1380,6 +1559,240 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* ── Manual Upload Modal ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {uploadModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => {
+                setUploadModalOpen(false);
+                setUploadError("");
+                setUploadSuccess("");
+              }}
+            />
+            <motion.div
+              initial={{ scale: 0.94, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 20 }}
+              className={`relative z-10 w-full max-w-md flex flex-col ${tk.cardBg} rounded-3xl shadow-2xl border ${tk.border} overflow-hidden`}
+            >
+              {/* Header */}
+              <div
+                className={`flex items-center justify-between px-6 py-4 border-b ${tk.border} flex-none`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 ${tk.accentBg} rounded-xl flex items-center justify-center`}
+                  >
+                    <ImagePlus size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className={`text-base font-bold ${tk.headingText}`}>
+                      Add Item to Wardrobe
+                    </h2>
+                    <p className={`text-xs ${tk.mutedText}`}>
+                      Upload a piece you already own
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setUploadModalOpen(false);
+                    setUploadError("");
+                    setUploadSuccess("");
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${tk.mutedBg} ${tk.mutedText} hover:opacity-80`}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                {/* Instructions */}
+                <div className={`p-3 ${tk.accentSubtle} rounded-xl`}>
+                  <p
+                    className={`text-xs ${tk.accentSubtleText} leading-relaxed`}
+                  >
+                    <strong>How to use:</strong> Enter details for a clothing
+                    item you own but didn't buy through Gmail — in-store
+                    purchases, gifts, or vintage finds. Adding a photo helps
+                    your AI Stylist give better recommendations.
+                  </p>
+                </div>
+
+                {/* Photo upload */}
+                <div>
+                  <label className={labelCls}>Photo (optional)</label>
+                  <label
+                    className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed ${tk.border} rounded-2xl cursor-pointer ${tk.surfaceBg} hover:border-indigo-400 transition-all overflow-hidden relative`}
+                  >
+                    {uploadPhotoPreview ? (
+                      <img
+                        src={uploadPhotoPreview}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload size={22} className={tk.mutedText} />
+                        <span
+                          className={`text-xs font-semibold ${tk.mutedText}`}
+                        >
+                          Click to upload photo
+                        </span>
+                        <span className={`text-xs ${tk.mutedText}`}>
+                          JPG, PNG, WebP · max 5 MB
+                        </span>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setUploadPhoto(f);
+                          setUploadPhotoPreview(URL.createObjectURL(f));
+                        }
+                      }}
+                    />
+                  </label>
+                  {uploadPhotoPreview && (
+                    <button
+                      onClick={() => {
+                        setUploadPhoto(null);
+                        setUploadPhotoPreview("");
+                      }}
+                      className={`mt-1 text-xs font-bold text-red-500 hover:text-red-600`}
+                    >
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+
+                {/* Item name */}
+                <div>
+                  <label className={labelCls}>Item Name *</label>
+                  <input
+                    value={uploadItemName}
+                    onChange={(e) => setUploadItemName(e.target.value)}
+                    placeholder="e.g. Navy Linen Blazer"
+                    className={`w-full px-4 py-3 text-sm ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`}
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className={labelCls}>Category *</label>
+                  <select
+                    value={uploadCategory}
+                    onChange={(e) => setUploadCategory(e.target.value)}
+                    className={`w-full px-4 py-3 text-sm ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} focus:outline-none focus:ring-2 transition-all`}
+                  >
+                    {[
+                      "Tops",
+                      "Bottoms",
+                      "Dresses",
+                      "Outerwear",
+                      "Footwear",
+                      "Swimwear",
+                      "Undergarments",
+                      "Accessories",
+                      "Other",
+                    ].map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Price + Merchant */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Price ($) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="9999"
+                      step="0.01"
+                      value={uploadPrice}
+                      onChange={(e) => setUploadPrice(e.target.value)}
+                      placeholder="0.00"
+                      className={`w-full px-4 py-3 text-sm ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Store / Brand</label>
+                    <input
+                      value={uploadMerchant}
+                      onChange={(e) => setUploadMerchant(e.target.value)}
+                      placeholder="e.g. Zara"
+                      className={`w-full px-4 py-3 text-sm ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`}
+                    />
+                  </div>
+                </div>
+
+                {/* Error / Success */}
+                {uploadError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                    <AlertTriangle
+                      size={14}
+                      className="text-red-500 flex-none mt-0.5"
+                    />
+                    <p className="text-xs text-red-700">{uploadError}</p>
+                  </div>
+                )}
+                {uploadSuccess && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2">
+                    <CheckCircle
+                      size={14}
+                      className="text-emerald-500 flex-none mt-0.5"
+                    />
+                    <p className="text-xs text-emerald-700 font-semibold">
+                      {uploadSuccess}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {/* Footer */}
+              <div className={`px-6 py-4 border-t ${tk.border} flex gap-3`}>
+                <button
+                  onClick={() => {
+                    setUploadModalOpen(false);
+                    setUploadError("");
+                    setUploadSuccess("");
+                  }}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-bold border ${tk.border} ${tk.bodyText} hover:opacity-80 transition-all`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleManualUpload}
+                  disabled={uploadLoading}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-bold ${tk.accentBg} text-white ${tk.accentHover} transition-all disabled:opacity-60 flex items-center justify-center gap-2`}
+                >
+                  {uploadLoading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Adding…
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={14} /> Add to Wardrobe
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header
         className={`fixed top-0 left-0 right-0 z-50 ${tk.headerBg} backdrop-blur-md border-b ${tk.border} transition-colors duration-300`}
@@ -1409,7 +1822,7 @@ export default function App() {
           </motion.button>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-7 p-8">
+          <div className="hidden md:flex items-center gap-3">
             {view === "landing" && (
               <>
                 <a
@@ -1577,9 +1990,9 @@ export default function App() {
                       setView("signup");
                       setIsMenuOpen(false);
                     }}
-                    className={`w-full py-3 text-base font-semibold rounded-2xl ${
+                    className={`w-full py-3 text-black text-base font-semibold rounded-2xl ${
                       view === "signup"
-                        ? `${tk.accentBg} text-white`
+                        ? `${tk.accentBg} text-black`
                         : `border ${tk.border} ${tk.headingText}`
                     }`}
                   >
@@ -1592,7 +2005,7 @@ export default function App() {
                     }}
                     className={`w-full py-3 text-base font-semibold rounded-2xl ${
                       view === "signin"
-                        ? `${tk.accentBg} text-white`
+                        ? `${tk.accentBg} text-black`
                         : `border ${tk.border} ${tk.headingText}`
                     }`}
                   >
@@ -1916,7 +2329,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="pt-32 pb-10 px-4 sm:px-6 flex-1 flex items-center justify-center min-h-screen"
+              className="pt-16 pb-10 px-4 sm:px-6 flex-1 flex items-center justify-center min-h-screen"
             >
               <div
                 className={`max-w-md w-full ${tk.cardBg} p-5 sm:p-8 rounded-3xl shadow-xl border ${tk.border} my-4`}
@@ -2695,7 +3108,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="pt-16 pb-10 px-4 sm:px-6 flex-1 flex flex-col items-center justify-center"
+              className="pt-26 pb-10 px-4 sm:px-6 flex-1 flex flex-col items-center justify-center"
             >
               <div className="max-w-md w-full text-center mb-6">
                 <h2
@@ -3045,7 +3458,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="pt-36 mt-10 sm:pt-20 pb-10 px-4 sm:px-6 max-w-screen-xl mx-auto flex-1 w-full"
+              className="pt-16 sm:pt-20 pb-10 px-4 sm:px-6 max-w-screen-xl mx-auto flex-1 w-full"
             >
               {/* Page header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
@@ -3676,21 +4089,34 @@ export default function App() {
                     outfits created
                   </p>
                 </div>
-                <button
-                  onClick={() => setOutfitBuilderOpen((o) => !o)}
-                  className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
-                    outfitBuilderOpen
-                      ? `${tk.skyBg} text-white ${tk.skyHover}`
-                      : isDark
-                      ? "bg-slate-200 text-slate-900 hover:bg-white"
-                      : "bg-slate-900 text-white hover:bg-slate-800"
-                  }`}
-                >
-                  <Sparkles size={17} />
-                  {outfitBuilderOpen
-                    ? "Hide Outfit Builder"
-                    : "Build an Outfit"}
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => {
+                      setUploadModalOpen(true);
+                      setUploadError("");
+                      setUploadSuccess("");
+                    }}
+                    className={`flex-1 sm:flex-none px-4 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all border ${tk.border} ${tk.cardBg} ${tk.bodyText} hover:border-indigo-400`}
+                    title="Manually add a clothing item you already own"
+                  >
+                    <ImagePlus size={15} /> Add Item
+                  </button>
+                  <button
+                    onClick={() => setOutfitBuilderOpen((o) => !o)}
+                    className={`flex-1 sm:flex-none px-5 py-3 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
+                      outfitBuilderOpen
+                        ? `${tk.skyBg} text-white ${tk.skyHover}`
+                        : isDark
+                        ? "bg-slate-200 text-slate-900 hover:bg-white"
+                        : "bg-slate-900 text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    <Sparkles size={17} />
+                    {outfitBuilderOpen
+                      ? "Hide Outfit Builder"
+                      : "Build an Outfit"}
+                  </button>
+                </div>
               </div>
               <div
                 className={`flex gap-6 ${
@@ -4117,132 +4543,772 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ── CONSUMER PROFILE (unchanged) ──────────────────────────────── */}
+          {/* ── CONSUMER PROFILE — tabs: Info | Color Analysis | AI Stylist ── */}
           {view === "profile" && (
             <motion.div
               key="profile"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="pt-16 pb-10 px-4 sm:px-6 flex-1 flex items-center justify-center"
+              className="pt-16 pb-10 px-4 sm:px-6 flex-1 w-full max-w-4xl mx-auto"
             >
+              {/* Top bar */}
+              <div className="flex justify-between items-center mt-4 mb-6">
+                <button
+                  onClick={() => setView("consumer dashboard")}
+                  className={`text-sm font-bold ${tk.mutedText} hover:${tk.accentText} transition-colors flex items-center gap-1.5`}
+                >
+                  <ChevronLeft size={16} /> Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    setUser({
+                      firstName: "",
+                      lastName: "",
+                      email: "",
+                      userId: "",
+                      role: "consumer",
+                    });
+                    setView("landing");
+                  }}
+                  className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+
+              {/* Tab bar */}
               <div
-                className={`max-w-2xl w-full ${tk.cardBg} p-6 sm:p-8 rounded-3xl shadow-xl border ${tk.border}`}
+                className={`flex ${tk.surfaceBg} rounded-2xl p-1 mb-6 border ${tk.border} gap-1`}
               >
-                <div className="flex justify-between items-center mb-8">
+                {(
+                  [
+                    ["info", "Account & Budget", User],
+                    ["color", "Color Analysis", Palette],
+                    ["stylist", "AI Stylist", MessageCircle],
+                  ] as const
+                ).map(([tab, label, Icon]) => (
                   <button
-                    onClick={() => setView("consumer dashboard")}
-                    className={`text-sm font-bold ${tk.mutedText} hover:${tk.accentText} transition-colors flex items-center gap-1.5`}
+                    key={tab}
+                    onClick={() => setProfileTab(tab as any)}
+                    className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      profileTab === tab
+                        ? `${tk.accentBg} text-white shadow-sm`
+                        : `${tk.mutedText} hover:opacity-80`
+                    }`}
                   >
-                    <ChevronLeft size={16} /> Back to Dashboard
+                    <Icon size={13} />{" "}
+                    <span className="hidden sm:inline">{label}</span>
+                    <span className="sm:hidden">{label.split(" ")[0]}</span>
                   </button>
-                  <button
-                    onClick={() => {
-                      setUser({
-                        firstName: "",
-                        lastName: "",
-                        email: "",
-                        userId: "",
-                        role: "consumer",
-                      });
-                      setView("landing");
-                    }}
-                    className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors"
+                ))}
+              </div>
+
+              {/* ── TAB: Account & Budget ── */}
+              <AnimatePresence mode="wait">
+                {profileTab === "info" && (
+                  <motion.div
+                    key="info"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
                   >
-                    Sign Out
-                  </button>
-                </div>
-                <div className="grid md:grid-cols-2 gap-10">
-                  <div>
-                    <h2 className={`text-2xl font-bold ${tk.headingText} mb-5`}>
-                      User Profile
-                    </h2>
-                    <div className="space-y-3">
-                      {[
-                        {
-                          label: "Full Name",
-                          value:
-                            `${user.firstName} ${user.lastName}`.trim() || "—",
-                        },
-                        { label: "Email Address", value: user.email || "—" },
-                      ].map(({ label, value }) => (
-                        <div
-                          key={label}
-                          className={`p-4 ${tk.surfaceBg} rounded-xl border ${tk.border}`}
-                        >
-                          <label
-                            className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} block mb-1`}
+                    <div
+                      className={`${tk.cardBg} rounded-3xl shadow-xl border ${tk.border} p-6 sm:p-8`}
+                    >
+                      <div className="grid md:grid-cols-2 gap-10">
+                        <div>
+                          <h2
+                            className={`text-2xl font-bold ${tk.headingText} mb-5`}
                           >
-                            {label}
-                          </label>
+                            User Profile
+                          </h2>
+                          <div className="space-y-3">
+                            {[
+                              {
+                                label: "Full Name",
+                                value:
+                                  `${user.firstName} ${user.lastName}`.trim() ||
+                                  "—",
+                              },
+                              {
+                                label: "Email Address",
+                                value: user.email || "—",
+                              },
+                            ].map(({ label, value }) => (
+                              <div
+                                key={label}
+                                className={`p-4 ${tk.surfaceBg} rounded-xl border ${tk.border}`}
+                              >
+                                <label
+                                  className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} block mb-1`}
+                                >
+                                  {label}
+                                </label>
+                                <p
+                                  className={`text-base font-semibold ${tk.headingText}`}
+                                >
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
+                            <div
+                              className={`p-4 ${tk.surfaceBg} rounded-xl border ${tk.border}`}
+                            >
+                              <label
+                                className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} block mb-1`}
+                              >
+                                Account Status
+                              </label>
+                              <div className="flex items-center gap-2 text-emerald-500">
+                                <CheckCircle size={16} />
+                                <span className="text-base font-semibold">
+                                  Verified
+                                </span>
+                              </div>
+                            </div>
+                            {colorAnalysisResult && (
+                              <div
+                                className={`p-4 ${tk.accentSubtle} rounded-xl border ${tk.border}`}
+                              >
+                                <label
+                                  className={`text-xs font-bold uppercase tracking-widest ${tk.accentSubtleText} block mb-1`}
+                                >
+                                  Color Season
+                                </label>
+                                <p
+                                  className={`text-base font-bold ${tk.headingText}`}
+                                >
+                                  {colorAnalysisResult.season}
+                                </p>
+                                <p className={`text-xs ${tk.mutedText} mt-1`}>
+                                  {colorAnalysisResult.undertone} undertone ·{" "}
+                                  {colorAnalysisResult.skin_depth} depth
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <h2
+                            className={`text-2xl font-bold ${tk.headingText} mb-5`}
+                          >
+                            Budget Settings
+                          </h2>
                           <p
-                            className={`text-base font-semibold ${tk.headingText}`}
+                            className={`text-sm ${tk.subtleText} mb-5 leading-relaxed`}
                           >
-                            {value}
+                            Based on your scanned receipts, you've spent an
+                            average of{" "}
+                            <span className={`font-bold ${tk.headingText}`}>
+                              ${historicalSpend.toFixed(0)}
+                            </span>{" "}
+                            per month on clothing.
+                          </p>
+                          <div className="space-y-5">
+                            <div>
+                              <label
+                                htmlFor="monthlyBudget"
+                                className={labelCls}
+                              >
+                                Monthly Clothing Budget ($)
+                              </label>
+                              <div className="relative">
+                                <span
+                                  className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold ${tk.mutedText}`}
+                                >
+                                  $
+                                </span>
+                                <input
+                                  id="monthlyBudget"
+                                  type="number"
+                                  defaultValue={budget || 500}
+                                  onChange={(e) =>
+                                    setBudget(Number(e.target.value))
+                                  }
+                                  className={`w-full pl-10 pr-4 py-3 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-xl font-bold ${tk.inputFocus} ${tk.inputText} focus:outline-none focus:ring-2 transition-all`}
+                                  placeholder="500"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setView("consumer dashboard")}
+                              className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold text-base ${tk.accentHover} transition-all shadow-lg`}
+                            >
+                              Save Settings
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── TAB: Color Analysis ── */}
+                {profileTab === "color" && (
+                  <motion.div
+                    key="color"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="space-y-5"
+                  >
+                    {/* Explainer */}
+                    <div
+                      className={`${tk.cardBg} rounded-3xl border ${tk.border} p-6`}
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div
+                          className={`w-10 h-10 ${tk.accentBg} rounded-2xl flex items-center justify-center`}
+                        >
+                          <Palette size={18} className="text-white" />
+                        </div>
+                        <div>
+                          <h2 className={`text-xl font-bold ${tk.headingText}`}>
+                            Personal Color Analysis
+                          </h2>
+                          <p className={`text-sm ${tk.mutedText}`}>
+                            Powered by Gemini AI Vision
                           </p>
                         </div>
-                      ))}
+                      </div>
                       <div
-                        className={`p-4 ${tk.surfaceBg} rounded-xl border ${tk.border}`}
+                        className={`p-4 ${tk.accentSubtle} rounded-2xl mb-5`}
                       >
-                        <label
-                          className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} block mb-1`}
+                        <p
+                          className={`text-sm ${tk.accentSubtleText} leading-relaxed`}
                         >
-                          Account Status
-                        </label>
-                        <div className="flex items-center gap-2 text-emerald-500">
-                          <CheckCircle size={16} />
-                          <span className="text-base font-semibold">
-                            Verified
-                          </span>
-                        </div>
+                          <strong>What is Color Season Analysis?</strong> Color
+                          season theory identifies which palette of colors
+                          naturally harmonizes with your unique combination of
+                          skin tone, hair, and eye color — helping you dress in
+                          shades that make you glow. This analysis uses AI
+                          vision to examine your photos and determine whether
+                          you are a warm Spring, cool Summer, warm Autumn, or
+                          cool Winter type (and which of the 12 sub-seasons
+                          within those).
+                        </p>
+                        <p
+                          className={`text-sm ${tk.accentSubtleText} leading-relaxed mt-2`}
+                        >
+                          <strong>For best results:</strong> Use natural
+                          lighting, no heavy makeup or filters. The face photo
+                          should show your natural hair (or roots), and the
+                          full-body photo helps assess overall contrast. All
+                          body types, skin tones, and gender expressions are
+                          fully supported — this analysis celebrates YOU.
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h2 className={`text-2xl font-bold ${tk.headingText} mb-5`}>
-                      Budget Settings
-                    </h2>
-                    <p
-                      className={`text-sm ${tk.subtleText} mb-5 leading-relaxed`}
-                    >
-                      Based on your scanned receipts, you've spent an average of{" "}
-                      <span className={`font-bold ${tk.headingText}`}>
-                        ${historicalSpend.toFixed(0)}
-                      </span>{" "}
-                      per month on clothing.
-                    </p>
-                    <div className="space-y-5">
-                      <div>
-                        <label htmlFor="monthlyBudget" className={labelCls}>
-                          Monthly Clothing Budget ($)
-                        </label>
-                        <div className="relative">
-                          <span
-                            className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold ${tk.mutedText}`}
+
+                      {/* Photo upload boxes */}
+                      <div className="grid sm:grid-cols-2 gap-4 mb-5">
+                        {/* Full body */}
+                        <div>
+                          <label className={labelCls}>Full Body Photo *</label>
+                          <label
+                            className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden relative transition-all ${
+                              fullBodyPreview
+                                ? "border-indigo-400"
+                                : `${tk.border} hover:border-indigo-400`
+                            } ${tk.surfaceBg}`}
                           >
-                            $
-                          </span>
-                          <input
-                            id="monthlyBudget"
-                            type="number"
-                            defaultValue={budget || 500}
-                            onChange={(e) => setBudget(Number(e.target.value))}
-                            className={`w-full pl-10 pr-4 py-3 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-xl font-bold ${tk.inputFocus} ${tk.inputText} focus:outline-none focus:ring-2 transition-all`}
-                            placeholder="500"
-                          />
+                            {fullBodyPreview ? (
+                              <img
+                                src={fullBodyPreview}
+                                alt="Full body preview"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center gap-2 p-4 text-center">
+                                <Camera size={28} className={tk.mutedText} />
+                                <span
+                                  className={`text-sm font-semibold ${tk.mutedText}`}
+                                >
+                                  Upload full body photo
+                                </span>
+                                <span className={`text-xs ${tk.mutedText}`}>
+                                  Stand in natural light · No filters · Any
+                                  outfit
+                                </span>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  setFullBodyPhoto(f);
+                                  setFullBodyPreview(URL.createObjectURL(f));
+                                }
+                              }}
+                            />
+                          </label>
+                          {fullBodyPreview && (
+                            <button
+                              onClick={() => {
+                                setFullBodyPhoto(null);
+                                setFullBodyPreview("");
+                              }}
+                              className="mt-1 text-xs font-bold text-red-500"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        {/* Face close-up */}
+                        <div>
+                          <label className={labelCls}>
+                            Close-Up Face Photo *
+                          </label>
+                          <label
+                            className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden relative transition-all ${
+                              facePreview
+                                ? "border-indigo-400"
+                                : `${tk.border} hover:border-indigo-400`
+                            } ${tk.surfaceBg}`}
+                          >
+                            {facePreview ? (
+                              <img
+                                src={facePreview}
+                                alt="Face preview"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center gap-2 p-4 text-center">
+                                <User size={28} className={tk.mutedText} />
+                                <span
+                                  className={`text-sm font-semibold ${tk.mutedText}`}
+                                >
+                                  Upload close-up face photo
+                                </span>
+                                <span className={`text-xs ${tk.mutedText}`}>
+                                  Natural light · Clear face · Minimal makeup
+                                </span>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  setFacePhoto(f);
+                                  setFacePreview(URL.createObjectURL(f));
+                                }
+                              }}
+                            />
+                          </label>
+                          {facePreview && (
+                            <button
+                              onClick={() => {
+                                setFacePhoto(null);
+                                setFacePreview("");
+                              }}
+                              className="mt-1 text-xs font-bold text-red-500"
+                            >
+                              Remove
+                            </button>
+                          )}
                         </div>
                       </div>
+
+                      {colorAnalysisError && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                          <AlertTriangle
+                            size={14}
+                            className="text-red-500 flex-none mt-0.5"
+                          />
+                          <p className="text-sm text-red-700">
+                            {colorAnalysisError}
+                          </p>
+                        </div>
+                      )}
+
                       <button
-                        onClick={() => setView("consumer dashboard")}
-                        className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold text-base ${tk.accentHover} transition-all shadow-lg`}
+                        onClick={handleColorAnalysis}
+                        disabled={
+                          colorAnalysisLoading || !fullBodyPhoto || !facePhoto
+                        }
+                        className={`w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
+                          colorAnalysisLoading
+                            ? `${tk.accentBg} opacity-70 cursor-wait`
+                            : !fullBodyPhoto || !facePhoto
+                            ? `${tk.mutedBg} ${tk.mutedText} cursor-not-allowed`
+                            : `${tk.accentBg} text-white ${tk.accentHover} shadow-lg`
+                        }`}
                       >
-                        Save Settings
+                        {colorAnalysisLoading ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />{" "}
+                            Analyzing your colors…
+                          </>
+                        ) : (
+                          <>
+                            <Palette size={18} /> Analyze My Color Season
+                          </>
+                        )}
                       </button>
+                      {(!fullBodyPhoto || !facePhoto) &&
+                        !colorAnalysisLoading && (
+                          <p
+                            className={`text-xs text-center ${tk.mutedText} mt-2`}
+                          >
+                            Upload both photos above to continue
+                          </p>
+                        )}
                     </div>
-                  </div>
-                </div>
-              </div>
+
+                    {/* Results card */}
+                    {colorAnalysisResult && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`${tk.cardBg} rounded-3xl border ${tk.border} p-6`}
+                      >
+                        {/* Season hero */}
+                        <div
+                          className={`p-5 ${tk.accentBg} rounded-2xl text-white mb-5`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold uppercase tracking-widest text-white/70">
+                              Your Color Season
+                            </span>
+                            <span className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                              {Math.round(
+                                (colorAnalysisResult.confidence || 0.85) * 100
+                              )}
+                              % confidence
+                            </span>
+                          </div>
+                          <h3 className="text-3xl font-bold mb-1">
+                            {colorAnalysisResult.season}
+                          </h3>
+                          <p className="text-sm text-white/80">
+                            {colorAnalysisResult.season_family} ·{" "}
+                            {colorAnalysisResult.undertone} undertone ·{" "}
+                            {colorAnalysisResult.contrast_level} contrast ·{" "}
+                            {colorAnalysisResult.skin_depth} depth
+                          </p>
+                        </div>
+
+                        {/* Palette description */}
+                        <p
+                          className={`text-sm ${tk.subtleText} mb-5 leading-relaxed`}
+                        >
+                          {colorAnalysisResult.palette_description}
+                        </p>
+
+                        <div className="grid sm:grid-cols-2 gap-5 mb-5">
+                          {/* Best colors */}
+                          <div>
+                            <h4
+                              className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-3`}
+                            >
+                              Your Best Colors
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {(colorAnalysisResult.dominant_colors || []).map(
+                                (color: string, i: number) => (
+                                  <span
+                                    key={i}
+                                    className={`px-3 py-1.5 ${tk.accentSubtle} ${tk.accentSubtleText} rounded-full text-xs font-bold`}
+                                  >
+                                    {color}
+                                  </span>
+                                )
+                              )}
+                            </div>
+                          </div>
+                          {/* Avoid */}
+                          <div>
+                            <h4
+                              className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-3`}
+                            >
+                              Colors to Avoid
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {(colorAnalysisResult.avoid_colors || []).map(
+                                (color: string, i: number) => (
+                                  <span
+                                    key={i}
+                                    className={`px-3 py-1.5 bg-red-50 text-red-700 rounded-full text-xs font-bold`}
+                                  >
+                                    {color}
+                                  </span>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Styling tips */}
+                        <div className="mb-5">
+                          <h4
+                            className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-3`}
+                          >
+                            Styling Tips
+                          </h4>
+                          <div className="space-y-2">
+                            {(colorAnalysisResult.styling_tips || []).map(
+                              (tip: string, i: number) => (
+                                <div
+                                  key={i}
+                                  className={`flex gap-2 p-3 ${tk.surfaceBg} rounded-xl border ${tk.border}`}
+                                >
+                                  <span
+                                    className={`${tk.accentText} font-bold text-sm flex-none`}
+                                  >
+                                    {i + 1}.
+                                  </span>
+                                  <p className={`text-sm ${tk.bodyText}`}>
+                                    {tip}
+                                  </p>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Celebrity examples */}
+                        {colorAnalysisResult.celebrity_examples?.length > 0 && (
+                          <div>
+                            <h4
+                              className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-2`}
+                            >
+                              Style Icons With Your Season
+                            </h4>
+                            <p className={`text-sm ${tk.bodyText}`}>
+                              {colorAnalysisResult.celebrity_examples.join(
+                                " · "
+                              )}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* CTA to AI stylist */}
+                        <button
+                          onClick={() => {
+                            setProfileTab("stylist");
+                            setStylistMessages([
+                              {
+                                role: "assistant",
+                                content: `Hi! I can see you're a **${colorAnalysisResult.season}** — such a beautiful palette! I've already factored your color season into my recommendations. What would you like help with today? I can suggest outfits from your wardrobe, find color-perfect gaps to fill, or help you plan a shopping list. 🎨`,
+                              },
+                            ]);
+                          }}
+                          className={`mt-5 w-full py-3.5 ${tk.accentBg} text-white rounded-2xl font-bold flex items-center justify-center gap-2 ${tk.accentHover} transition-all`}
+                        >
+                          <MessageCircle size={16} /> Chat with AI Stylist About
+                          Your Season
+                        </button>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* ── TAB: AI Stylist ── */}
+                {profileTab === "stylist" && (
+                  <motion.div
+                    key="stylist"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className={`${tk.cardBg} rounded-3xl border ${tk.border} flex flex-col`}
+                    style={{
+                      height: "calc(100vh - 260px)",
+                      minHeight: "500px",
+                    }}
+                  >
+                    {/* Chat header */}
+                    <div
+                      className={`flex items-center gap-3 px-5 py-4 border-b ${tk.border} flex-none`}
+                    >
+                      <div
+                        className={`w-10 h-10 ${tk.accentBg} rounded-2xl flex items-center justify-center`}
+                      >
+                        <MessageCircle size={18} className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h2 className={`text-base font-bold ${tk.headingText}`}>
+                          AI Stylist
+                        </h2>
+                        <p className={`text-xs ${tk.mutedText}`}>
+                          Powered by Claude · {wardrobeItems.length} wardrobe
+                          items loaded
+                          {colorAnalysisResult
+                            ? ` · ${colorAnalysisResult.season} season`
+                            : " · Complete color analysis for palette-aware advice"}
+                        </p>
+                      </div>
+                      {stylistMessages.length > 0 && (
+                        <button
+                          onClick={() => setStylistMessages([])}
+                          className={`text-xs font-bold ${tk.mutedText} hover:text-red-500 transition-colors`}
+                        >
+                          Clear chat
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Instructions (shown when chat is empty) */}
+                    {stylistMessages.length === 0 && (
+                      <div className="flex-1 overflow-y-auto px-5 py-5">
+                        <div
+                          className={`p-5 ${tk.accentSubtle} rounded-2xl mb-4`}
+                        >
+                          <h3
+                            className={`text-sm font-bold ${tk.accentSubtleText} mb-2`}
+                          >
+                            Your personal wardrobe stylist — ask me anything!
+                          </h3>
+                          <p
+                            className={`text-xs ${tk.accentSubtleText} leading-relaxed mb-3`}
+                          >
+                            I have full access to your wardrobe (
+                            {wardrobeItems.length} items), your spending stats,
+                            and
+                            {colorAnalysisResult
+                              ? ` your ${colorAnalysisResult.season} color season`
+                              : " your style preferences"}
+                            . I give inclusive, gender-affirming advice for all
+                            body types and expressions.
+                          </p>
+                          <div className="grid grid-cols-1 gap-2">
+                            {[
+                              "What outfit can I make for a job interview from my wardrobe?",
+                              "What's missing from my wardrobe?",
+                              "Suggest a casual weekend look from what I own.",
+                              "What should I buy next given my style and budget?",
+                              `What colors should I be wearing${
+                                colorAnalysisResult
+                                  ? ` as a ${colorAnalysisResult.season}`
+                                  : ""
+                              }?`,
+                            ].map((suggestion, i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  setStylistInput(suggestion);
+                                }}
+                                className={`text-left px-4 py-2.5 ${tk.cardBg} border ${tk.border} rounded-xl text-xs font-medium ${tk.bodyText} hover:border-indigo-400 transition-all`}
+                              >
+                                "{suggestion}"
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Messages */}
+                    {stylistMessages.length > 0 && (
+                      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                        {stylistMessages.map((msg, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`flex ${
+                              msg.role === "user"
+                                ? "justify-end"
+                                : "justify-start"
+                            }`}
+                          >
+                            {msg.role === "assistant" && (
+                              <div
+                                className={`w-7 h-7 ${tk.accentBg} rounded-full flex items-center justify-center flex-none mr-2 mt-0.5`}
+                              >
+                                <MessageCircle
+                                  size={12}
+                                  className="text-white"
+                                />
+                              </div>
+                            )}
+                            <div
+                              className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                                msg.role === "user"
+                                  ? `${tk.accentBg} text-white rounded-tr-sm`
+                                  : `${tk.surfaceBg} ${tk.bodyText} border ${tk.border} rounded-tl-sm`
+                              }`}
+                            >
+                              {msg.content}
+                            </div>
+                          </motion.div>
+                        ))}
+                        {stylistLoading && (
+                          <div className="flex justify-start">
+                            <div
+                              className={`w-7 h-7 ${tk.accentBg} rounded-full flex items-center justify-center flex-none mr-2`}
+                            >
+                              <MessageCircle size={12} className="text-white" />
+                            </div>
+                            <div
+                              className={`px-4 py-3 rounded-2xl ${tk.surfaceBg} border ${tk.border} rounded-tl-sm`}
+                            >
+                              <div className="flex gap-1.5 items-center h-4">
+                                {[0, 1, 2].map((j) => (
+                                  <motion.div
+                                    key={j}
+                                    className={`w-1.5 h-1.5 ${tk.accentBg} rounded-full`}
+                                    animate={{ y: [0, -4, 0] }}
+                                    transition={{
+                                      duration: 0.6,
+                                      delay: j * 0.15,
+                                      repeat: Infinity,
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Input bar */}
+                    <div
+                      className={`px-4 py-4 border-t ${tk.border} flex-none`}
+                    >
+                      <div
+                        className={`flex gap-2 items-end ${tk.surfaceBg} rounded-2xl border ${tk.border} px-4 py-3`}
+                      >
+                        <textarea
+                          value={stylistInput}
+                          onChange={(e) => setStylistInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleStylistSend();
+                            }
+                          }}
+                          placeholder="Ask your stylist anything… (Enter to send, Shift+Enter for new line)"
+                          rows={1}
+                          className={`flex-1 bg-transparent text-sm ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none resize-none`}
+                          style={{ maxHeight: "120px", overflowY: "auto" }}
+                        />
+                        <button
+                          onClick={handleStylistSend}
+                          disabled={stylistLoading || !stylistInput.trim()}
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-none transition-all ${
+                            stylistLoading || !stylistInput.trim()
+                              ? `${tk.mutedBg} ${tk.mutedText}`
+                              : `${tk.accentBg} text-white ${tk.accentHover}`
+                          }`}
+                        >
+                          <Send size={15} />
+                        </button>
+                      </div>
+                      <p className={`text-xs ${tk.mutedText} text-center mt-2`}>
+                        Your full wardrobe and color season are shared with the
+                        AI for personalized advice.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 

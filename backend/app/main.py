@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.routers import auth, scan, review
 from app.routers import business  # NEW
+from app.routers import profile   # NEW — color analysis, AI stylist, manual upload
 
 # Create all SQLite tables on startup (safe to call repeatedly — skips existing tables)
 Base.metadata.create_all(bind=engine)
@@ -29,6 +30,7 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(scan.router, prefix="/scan", tags=["scan"])
 app.include_router(review.router, prefix="/review-items", tags=["review"])
 app.include_router(business.router, prefix="/business", tags=["business"])  # NEW
+app.include_router(profile.router, prefix="/profile", tags=["profile"])   # NEW
 
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/")
