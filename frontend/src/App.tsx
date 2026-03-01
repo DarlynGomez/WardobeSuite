@@ -450,14 +450,14 @@ export default function App() {
       image:
         "Images/Scan.png",
       description:
-        "WardrobeSuite securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits.",
+        "WardrobeSync securely connects to your Gmail account, scanning for purchase receipts to automatically build your digital wardrobe and track your spending habits.",
     },
     {
       title: "Set a Budget",
       image:
         "Images/Budget.png",
       description:
-        "Customize your experience by setting a monthly clothing budget. WardrobeSuite learns from your choices to provide personalized recommendations to fit your financial need.",
+        "Customize your experience by setting a monthly clothing budget. WardrobeSync learns from your choices to provide personalized recommendations to fit your financial need.",
     },
     {
       title: "Create Outfits in Your Wardrobe",
@@ -483,7 +483,7 @@ export default function App() {
       image:
         "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800",
       description:
-        "Get a live view of purchases attributed to your brand across the WardrobeSuite network. Track revenue, order volume, and customer trends in a single dashboard — no manual reporting required.",
+        "Get a live view of purchases attributed to your brand across the WardrobeSync network. Track revenue, order volume, and customer trends in a single dashboard — no manual reporting required.",
     },
     {
       icon: Users,
@@ -692,13 +692,13 @@ export default function App() {
           >
             <img
               src="Images/Logo.png"
-              alt="WardrobeSuite logo"
+              alt="WardrobeSync logo"
               className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover flex-none"
             />
             <span
               className={`font-bold text-base sm:text-lg tracking-tight ${tk.headingText}`}
             >
-              WardrobeSuite
+              WardrobeSync
             </span>
           </motion.button>
 
@@ -985,7 +985,7 @@ export default function App() {
                       className={`text-lg sm:text-xl ${tk.subtleText} mb-10 max-w-lg leading-relaxed`}
                     >
                       Manage your digital wardrobe and budget in a single
-                      application. WardrobeSuite analyzes your purchase history,
+                      application. WardrobeSync analyzes your purchase history,
                       monitors spending, and recommends items aligned with your
                       style and financial goals.
                     </p>
@@ -1013,7 +1013,7 @@ export default function App() {
                     <div className="aspect-[4/3] rounded-[3rem] overflow-hidden shadow-2xl">
                       <img
                         src="https://images.unsplash.com/photo-1624222244232-5f1ae13bbd53?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                        alt="WardrobeSuite dashboard preview"
+                        alt="WardrobeSync dashboard preview"
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
@@ -1054,7 +1054,7 @@ export default function App() {
                   </motion.h2>
                   <p className={`text-lg ${tk.subtleText} max-w-2xl mx-auto`}>
                     One idea, whiteboard sketches, and a long weekend hackathon
-                    later, WardrobeSuite was born.
+                    later, WardrobeSync was born.
                   </p>
                 </div>
                 <motion.div
@@ -1065,7 +1065,7 @@ export default function App() {
                 >
                   <img
                     src="Images/Team&Richie.jpg"
-                    alt="The WardrobeSuite team"
+                    alt="The WardrobeSync team"
                     className="w-full h-auto"
                     referrerPolicy="no-referrer"
                   />
@@ -1403,7 +1403,7 @@ export default function App() {
                         >
                           Privacy Policy
                         </button>
-                        . By creating an account, I consent to WardrobeSuite
+                        . By creating an account, I consent to WardrobeSync
                         accessing my purchase/business data to build my digital
                         wardrobe or business.
                       </label>
@@ -1538,7 +1538,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   className={`inline-block px-3 py-1 ${tk.accentSubtle} ${tk.accentSubtleText} rounded-full text-xs font-bold uppercase tracking-widest mb-3`}
                 >
-                  Welcome to WardrobeSuite!
+                  Welcome to WardrobeSync!
                 </motion.span>
                 <h2
                   className={`text-xl sm:text-2xl font-bold ${tk.headingText} mb-1`}
@@ -1613,7 +1613,7 @@ export default function App() {
                 onClick={() => setView("verification")}
                 className={`mt-8 px-7 py-3.5 ${isDark ? "bg-slate-200 text-slate-900 hover:bg-white" : "bg-slate-900 text-white hover:bg-slate-800"} rounded-2xl font-bold transition-all flex items-center gap-2 text-sm`}
               >
-                Get Started with WardrobeSuite <ArrowRight size={16} />
+                Get Started with WardrobeSync <ArrowRight size={16} />
               </motion.button>
             </motion.div>
           )}
@@ -1638,7 +1638,7 @@ export default function App() {
                 <h2
                   className={`text-xl sm:text-2xl font-bold ${tk.headingText} mb-1`}
                 >
-                  Here's what WardrobeSuite can do{" "}
+                  Here's what WardrobeSync can do{" "}
                   <span className={tk.accentText}>for your business…</span>
                 </h2>
               </div>
@@ -1882,7 +1882,7 @@ export default function App() {
                   </div>
                 </div>
                 <p className={`text-lg sm:text-xl ${tk.subtleText} mb-8`}>
-                  WardrobeSuite has scanned{" "}
+                  WardrobeSync has scanned{" "}
                   <span className={`font-bold ${tk.accentText} tabular-nums`}>
                     {scannedCount}
                   </span>{" "}
@@ -3161,17 +3161,17 @@ export default function App() {
           <div className="flex items-center gap-2">
             <img
               src="Images/Logo.png"
-              alt="WardrobeSuite logo"
+              alt="WardrobeSync logo"
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover"
             />
             <span
               className={`font-bold text-lg tracking-tight ${tk.headingText}`}
             >
-              WardrobeSuite
+              WardrobeSync
             </span>
           </div>
           <p className={`${tk.mutedText} text-sm text-center`}>
-            © 2026 WardrobeSuite. All rights reserved.
+            © 2026 WardrobeSync. All rights reserved.
           </p>
         </div>
       </footer>
