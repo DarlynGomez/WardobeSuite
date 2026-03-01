@@ -1101,13 +1101,13 @@ export default function App() {
                       name: "Dylan Chan",
                       role: "Fintech Logic & Backend Engineer",
                       img: "Images/DylanChan.png",
-                      desc: "First year cybersecurity student at Rochester Institute of Technology. Designed the spending analytics engine, including category normalization, calculations, and duplication detection across a user's wardrobe. Built the pre-purchase advisor endpoint that uses Gemini to deliver buy/skip/replace recommendations grounded in real spending context.",
+                      desc: "First year cybersecurity student at Rochester Institute of Technology. Built a backend processing component that parsed purchase related JSON data, extracted spending patterns, and updated a SQLite database with aggregated user insights. Transforming raw email derived records into structured metrics.",
                     },
                     {
                       name: "Luther Barreiro Roxo",
                       role: "UI/UX & Frontend Engineer",
                       img: "Images/LutherBRoxo.jpg",
-                      desc: "Second year game design and development student at Rochester Institute of Technology. Crafted the full user-facing experience from onboarding and Gmail scan flow to the swipe-based review queue and wardrobe inventory view. Designed the spending dashboard and purchase advisor screen, making complex fintech insights feel intuitive and visually clean. ",
+                      desc: "Second year game design and development student at Rochester Institute of Technology. Crafted the full user-facing experience from onboarding and Gmail scan flow to the swipe-based review queue and wardrobe inventory view. Designed the consumer and business dashboard, making complex fintech insights feel intuitive and visually clean. ",
                     },
                   ].map((student, i) => (
                     <motion.div
