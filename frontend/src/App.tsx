@@ -21,14 +21,9 @@ import {
   Sun,
   Moon,
   Building2,
-  AlertCircle,
-  Loader2,
 } from "lucide-react";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Types & Interfaces
 type ViewState =
   | "landing"
   | "signup"
@@ -37,8 +32,7 @@ type ViewState =
   | "verification"
   | "scanning"
   | "review"
-  | "consumer dashboard"
-  | "business dashboard"
+  | " consumer dashboard"
   | "budget"
   | "wardrobe"
   | "profile";
@@ -55,22 +49,11 @@ type ClothingCategory =
   | "Accessories";
 
 interface WardrobeItem {
-  id: string | number;
+  id: number;
   name: string;
   price: number;
   image: string;
   category: ClothingCategory;
-}
-
-interface ReviewItem {
-  id: string;
-  item_name: string;
-  price_cents: number | null;
-  price_missing: boolean;
-  image_url: string | null;
-  category: ClothingCategory;
-  merchant: string | null;
-  is_clothing?: boolean;
 }
 
 interface Outfit {
@@ -79,40 +62,50 @@ interface Outfit {
   items: WardrobeItem[];
 }
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
+// Theme definitions for light and dark modes, used for consistent styling across components
 const theme = {
   light: {
+    // Backgrounds
     pageBg: "bg-white",
     surfaceBg: "bg-slate-50",
     cardBg: "bg-white",
     mutedBg: "bg-slate-100",
+    // Text
     headingText: "text-slate-900",
     bodyText: "text-slate-700",
     subtleText: "text-slate-500",
     mutedText: "text-slate-400",
+    // Borders
     border: "border-slate-200",
     subtleBorder: "border-slate-100",
+    // Header
     headerBg: "bg-white/85",
+    // Accent — teal (primary actions, links, highlights)
     accentBg: "bg-teal-600",
     accentHover: "hover:bg-teal-700",
     accentText: "text-teal-600",
     accentSubtle: "bg-teal-50",
     accentSubtleText: "text-teal-700",
+    // Secondary accent — sky (wardrobe / outfit builder)
     skyBg: "bg-sky-600",
     skyHover: "hover:bg-sky-700",
     skyText: "text-sky-600",
     skySubtle: "bg-sky-50",
     skySubtleText: "text-sky-700",
+    // Inputs
     inputBg: "bg-slate-50",
     inputBorder: "border-slate-200",
     inputFocus: "focus:border-teal-500 focus:ring-teal-500/20",
     inputText: "text-slate-900",
+    // Nav buttons
     navBtn: "bg-slate-100 text-slate-600 hover:bg-slate-200",
+    // Filter panel
     filterBg: "bg-white",
     filterItemHover: "hover:bg-teal-50 hover:text-teal-700",
     filterActiveItem: "bg-teal-50 text-teal-700 font-semibold",
     filterPillBg:
       "bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-700",
+    // Swipe card
     swipeCard: "bg-white border-slate-200",
   },
   dark: {
@@ -151,7 +144,7 @@ const theme = {
   },
 };
 
-// ─── FilterSection ────────────────────────────────────────────────────────────
+// Filter section: accordian style
 function FilterSection({
   title,
   isOpen,
@@ -205,8 +198,7 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [carouselIndex, setCarouselIndex] = React.useState(0);
 
-  // ── Auth / User State ─────────────────────────────────────────────────────
-  const [userId, setUserId] = React.useState<string>("");
+  // User & App State
   const [user, setUser] = React.useState({
     firstName: "",
     lastName: "",
@@ -215,17 +207,13 @@ export default function App() {
   const [accountType, setAccountType] = React.useState<"consumer" | "business">(
     "consumer"
   );
-  const [authError, setAuthError] = React.useState("");
-  const [authLoading, setAuthLoading] = React.useState(false);
-
-  // ── Scan / Review State ───────────────────────────────────────────────────
   const [isVerified, setIsVerified] = React.useState(false);
   const [scannedCount, setScannedCount] = React.useState(0);
   const [isScanning, setIsScanning] = React.useState(false);
   const [budget, setBudget] = React.useState<number | null>(null);
   const [historicalSpend, setHistoricalSpend] = React.useState(1240.5);
 
-  // ── Wardrobe State ────────────────────────────────────────────────────────
+  // Wardrobe State
   const [wardrobeItems, setWardrobeItems] = React.useState<WardrobeItem[]>([
     {
       id: 10,
@@ -306,7 +294,7 @@ export default function App() {
   const [filterOpen, setFilterOpen] = React.useState(false);
   const [openSection, setOpenSection] = React.useState<string | null>(null);
 
-  // ── Outfit Builder State ──────────────────────────────────────────────────
+  // Outfit Builder State
   const [outfits, setOutfits] = React.useState<Outfit[]>([
     { id: 1, name: "Smart Casual Monday", items: [] },
   ]);
@@ -317,18 +305,61 @@ export default function App() {
   const [newOutfitName, setNewOutfitName] = React.useState("");
   const [outfitBuilderOpen, setOutfitBuilderOpen] = React.useState(false);
 
-  // ── Review / Swipe State ──────────────────────────────────────────────────
-  const [itemsToReview, setItemsToReview] = React.useState<ReviewItem[]>([]);
+  // Tinder Swipe State
+  const [itemsToReview] = React.useState([
+    {
+      id: 1,
+      name: "Vintage Denim Jacket",
+      price: 85,
+      image:
+        "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?auto=format&fit=crop&q=80&w=800",
+      isClothing: true,
+      category: "Outerwear" as ClothingCategory,
+    },
+    {
+      id: 2,
+      name: "Organic Coffee Beans",
+      price: 18,
+      image:
+        "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?auto=format&fit=crop&q=80&w=800",
+      isClothing: false,
+      category: "Accessories" as ClothingCategory,
+    },
+    {
+      id: 3,
+      name: "Minimalist Leather Boots",
+      price: 160,
+      image:
+        "https://images.unsplash.com/photo-1520639888713-7851133b1ed0?auto=format&fit=crop&q=80&w=800",
+      isClothing: true,
+      category: "Footwear" as ClothingCategory,
+    },
+    {
+      id: 4,
+      name: "Smart LED Bulb",
+      price: 25,
+      image:
+        "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=800",
+      isClothing: false,
+      category: "Accessories" as ClothingCategory,
+    },
+    {
+      id: 5,
+      name: "Graphic Cotton Tee",
+      price: 32,
+      image:
+        "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800",
+      isClothing: true,
+      category: "Tops" as ClothingCategory,
+    },
+  ]);
   const [reviewIndex, setReviewIndex] = React.useState(0);
   const [swipeDirection, setSwipeDirection] = React.useState<
     "left" | "right" | null
   >(null);
   const [showSwipeTip, setShowSwipeTip] = React.useState(true);
-  const [manualPrice, setManualPrice] = React.useState<string>("");
 
-  // ── Recommendations ───────────────────────────────────────────────────────
-  const [recommendationIndex, setRecommendationIndex] = React.useState(0);
-
+  // Recommendations
   const recommendations = [
     {
       id: 101,
@@ -465,281 +496,6 @@ export default function App() {
     "Accessories",
   ];
 
-  // ── API helpers ────────────────────────────────────────────────────────────
-  const apiHeaders = () => ({
-    "Content-Type": "application/json",
-    "X-User-Id": userId,
-  });
-
-  // ── OAuth callback listener ────────────────────────────────────────────────
-  // When Google redirects back to the frontend with ?oauth=success&user_id=...
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("oauth") === "success") {
-      const uid = params.get("user_id");
-      if (uid) {
-        setUserId(uid);
-        // Clean the URL
-        window.history.replaceState({}, "", window.location.pathname);
-        startScanning(uid);
-      }
-    }
-  }, []);
-
-  // ── Load wardrobe from backend when dashboard opens ────────────────────────
-  React.useEffect(() => {
-    if ((view !== "consumer dashboard" && view !== "wardrobe") || !userId)
-      return;
-    fetch(`${API}/items`, { headers: apiHeaders() })
-      .then((r) => r.json())
-      .then((data: any[]) => {
-        if (!Array.isArray(data)) return;
-        const mapped = data.map((item) => ({
-          id: item.id,
-          name: item.item_name,
-          price: (item.price_cents ?? 0) / 100,
-          image:
-            item.image_url ||
-            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
-          category: (item.category as ClothingCategory) || "Accessories",
-        }));
-        setWardrobeItems(mapped);
-      })
-      .catch(() => {});
-  }, [view, userId]);
-
-  // ── Load analytics for profile screen ────────────────────────────────────
-  React.useEffect(() => {
-    if (view !== "profile" || !userId) return;
-    fetch(`${API}/analytics/summary?window_days=90`, { headers: apiHeaders() })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.avg_purchase_cents) {
-          setHistoricalSpend(data.avg_purchase_cents / 100);
-        }
-      })
-      .catch(() => {});
-  }, [view, userId]);
-
-  // ── startScanning (can be called with explicit uid or uses state) ─────────
-  const startScanning = async (explicitUserId?: string) => {
-    const effectiveId = explicitUserId || userId;
-    setView("scanning");
-    setIsScanning(true);
-    setScannedCount(0);
-
-    try {
-      const res = await fetch(`${API}/scan/initial`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": effectiveId,
-        },
-        body: JSON.stringify({ initial_scan_days: 90 }),
-      });
-      const data = await res.json();
-      setScannedCount(data.queued_count ?? 0);
-    } catch {
-      setScannedCount(0);
-    } finally {
-      setIsScanning(false);
-    }
-
-    // Pre-load review queue
-    try {
-      const res = await fetch(`${API}/review-items`, {
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": effectiveId,
-        },
-      });
-      const items: ReviewItem[] = await res.json();
-      if (Array.isArray(items)) {
-        setItemsToReview(items);
-        setReviewIndex(0);
-      }
-    } catch {
-      // keep state
-    }
-  };
-
-  // ── handleSwipe — calls approve / reject API ──────────────────────────────
-  const handleSwipe = async (direction: "left" | "right") => {
-    setSwipeDirection(direction);
-    const currentItem = itemsToReview[reviewIndex];
-    if (!currentItem) return;
-
-    if (direction === "right") {
-      // Approve
-      const body: any = {};
-      if (currentItem.price_missing && manualPrice) {
-        body.edited_price_cents = Math.round(parseFloat(manualPrice) * 100);
-      }
-      try {
-        const res = await fetch(
-          `${API}/review-items/${currentItem.id}/approve`,
-          {
-            method: "POST",
-            headers: apiHeaders(),
-            body: JSON.stringify(body),
-          }
-        );
-        const data = await res.json();
-        if (data.wardrobe_item_id) {
-          // Optimistic update: add approved item to wardrobe immediately
-          setWardrobeItems((prev) => {
-            if (prev.find((i) => i.id === data.wardrobe_item_id)) return prev;
-            return [
-              ...prev,
-              {
-                id: data.wardrobe_item_id,
-                name: data.item_name,
-                price: (data.price_cents ?? 0) / 100,
-                image:
-                  data.image_url ||
-                  "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800",
-                category: (data.category as ClothingCategory) || "Accessories",
-              },
-            ];
-          });
-        }
-      } catch {
-        // non-fatal
-      }
-    } else {
-      // Reject
-      try {
-        await fetch(`${API}/review-items/${currentItem.id}/reject`, {
-          method: "POST",
-          headers: apiHeaders(),
-          body: JSON.stringify({}),
-        });
-      } catch {
-        // non-fatal
-      }
-    }
-
-    setManualPrice("");
-
-    setTimeout(() => {
-      if (reviewIndex < itemsToReview.length - 1) {
-        setReviewIndex((p) => p + 1);
-        setSwipeDirection(null);
-      } else {
-        const dest =
-          accountType === "business"
-            ? "business dashboard"
-            : "consumer dashboard";
-        setView(dest);
-      }
-    }, 200);
-  };
-
-  // ── Register ──────────────────────────────────────────────────────────────
-  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthLoading(true);
-
-    const fd = new FormData(e.currentTarget);
-    const firstName =
-      (fd.get("firstName") as string) ||
-      (fd.get("businessName") as string) ||
-      "";
-    const lastName = (fd.get("lastName") as string) || "";
-    const email = fd.get("email") as string;
-    const password = fd.get("password") as string;
-
-    try {
-      const res = await fetch(`${API}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          password,
-          account_type: accountType,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.detail || "Registration failed.");
-        return;
-      }
-      setUserId(data.user_id);
-      setUser({
-        firstName: data.first_name,
-        lastName: data.last_name,
-        email: data.email,
-      });
-      setAccountType(data.account_type || "consumer");
-      setView("onboarding");
-    } catch {
-      setAuthError("Could not connect to the server. Is the backend running?");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // ── Login ─────────────────────────────────────────────────────────────────
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthLoading(true);
-
-    const fd = new FormData(e.currentTarget);
-    const email = fd.get("email") as string;
-    const password = fd.get("password") as string;
-
-    try {
-      const res = await fetch(`${API}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthError(data.detail || "Login failed.");
-        return;
-      }
-      setUserId(data.user_id);
-      setUser({
-        firstName: data.first_name,
-        lastName: data.last_name,
-        email: data.email,
-      });
-      setAccountType(data.account_type || "consumer");
-
-      // Route based on account type
-      const dest =
-        data.account_type === "business"
-          ? "business dashboard"
-          : "consumer dashboard";
-      setView(dest);
-    } catch {
-      setAuthError("Could not connect to the server. Is the backend running?");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // ── Gmail OAuth trigger ───────────────────────────────────────────────────
-  const startGmailOAuth = async () => {
-    if (!userId) return;
-    try {
-      const res = await fetch(`${API}/auth/google/start?user_id=${userId}`);
-      const data = await res.json();
-      if (data.auth_url) {
-        window.location.href = data.auth_url;
-      }
-    } catch {
-      // fallback: just go straight to scanning (will fail without token)
-      startScanning();
-    }
-  };
-
-  // ── Wardrobe helpers ──────────────────────────────────────────────────────
   const filteredWardrobe = wardrobeItems.filter((item) => {
     const matchesCategory =
       activeCategory === "All" || item.category === activeCategory;
@@ -762,7 +518,7 @@ export default function App() {
     );
   };
 
-  const removeItemFromOutfit = (outfitId: number, itemId: string | number) => {
+  const removeItemFromOutfit = (outfitId: number, itemId: number) => {
     setOutfits((prev) =>
       prev.map((outfit) => {
         if (outfit.id !== outfitId) return outfit;
@@ -793,13 +549,56 @@ export default function App() {
     if (activeOutfitId === id) setActiveOutfitId(null);
   };
 
-  // ── Carousel helpers ──────────────────────────────────────────────────────
   const nextSlide = () =>
     setCarouselIndex((p) => (p + 1) % onboardingData.length);
   const prevSlide = () =>
     setCarouselIndex(
       (p) => (p - 1 + onboardingData.length) % onboardingData.length
     );
+
+  const startScanning = () => {
+    setView("scanning");
+    setIsScanning(true);
+    let count = 0;
+    const interval = setInterval(() => {
+      count += Math.floor(Math.random() * 3) + 1;
+      setScannedCount(count);
+      if (count >= 42) {
+        clearInterval(interval);
+        setIsScanning(false);
+      }
+    }, 200);
+  };
+
+  const handleSwipe = (direction: "left" | "right") => {
+    setSwipeDirection(direction);
+    const currentItem = itemsToReview[reviewIndex];
+    if (direction === "right" && currentItem.isClothing) {
+      setWardrobeItems((prev) => {
+        if (prev.find((i) => i.id === currentItem.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: currentItem.id,
+            name: currentItem.name,
+            price: currentItem.price,
+            image: currentItem.image,
+            category: currentItem.category,
+          },
+        ];
+      });
+    }
+    setTimeout(() => {
+      if (reviewIndex < itemsToReview.length - 1) {
+        setReviewIndex((p) => p + 1);
+        setSwipeDirection(null);
+      } else {
+        setView("consumer dashboard");
+      }
+    }, 200);
+  };
+
+  const [recommendationIndex, setRecommendationIndex] = React.useState(0);
   const nextRec = () =>
     setRecommendationIndex((p) => (p + 1) % (recommendations.length - 4));
   const prevRec = () =>
@@ -808,19 +607,11 @@ export default function App() {
         (p - 1 + (recommendations.length - 4)) % (recommendations.length - 4)
     );
 
-  // ── Reusable class strings ────────────────────────────────────────────────
+  // Reusable class strings
   const inputCls = `w-full px-4 py-3 text-base ${tk.inputBg} border ${tk.inputBorder} rounded-xl ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`;
   const labelCls = `block text-xs font-bold uppercase tracking-wider ${tk.mutedText} mb-1.5`;
 
-  const isDashboard = [
-    "consumer dashboard",
-    "business dashboard",
-    "budget",
-    "wardrobe",
-    "profile",
-  ].includes(view);
-
-  // ── Dark Toggle ───────────────────────────────────────────────────────────
+  // Shared dark-mode toggle button
   const DarkToggle = () => (
     <button
       onClick={() => setIsDark((d) => !d)}
@@ -831,13 +622,7 @@ export default function App() {
     </button>
   );
 
-  // Current review item helpers
-  const currentReviewItem = itemsToReview[reviewIndex];
-  const reviewDone = reviewIndex >= itemsToReview.length;
-  const canApprove =
-    !currentReviewItem?.price_missing || manualPrice.trim() !== "";
-
-  // ─────────────────────────────────────────────────────────────────────────
+  // Render
   return (
     <div
       className={`min-h-screen font-sans ${tk.pageBg} ${tk.bodyText} flex flex-col transition-colors duration-300`}
@@ -847,13 +632,22 @@ export default function App() {
         className={`fixed top-0 left-0 right-0 z-50 ${tk.headerBg} backdrop-blur-md border-b ${tk.border} transition-colors duration-300`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center relative">
+          {/* Clickable logo */}
           <motion.button
             layout
             onClick={() => setView("landing")}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             aria-label="Go to home"
             className={`flex items-center gap-2 absolute ${
-              isDashboard ? "left-4 sm:left-6" : "left-1/2 -translate-x-1/2"
+              [
+                "landing",
+                "consumer dashboard",
+                "budget",
+                "wardrobe",
+                "profile",
+              ].includes(view)
+                ? "left-4 sm:left-6"
+                : "left-1/2 -translate-x-1/2"
             }`}
           >
             <img
@@ -900,9 +694,11 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* App nav (dashboard views) */}
+          {/* App nav (dashboard / wardrobe / profile) */}
           <AnimatePresence>
-            {isDashboard && (
+            {["consumer dashboard", "budget", "wardrobe", "profile"].includes(
+              view
+            ) && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -915,26 +711,21 @@ export default function App() {
                       ? `${tk.accentBg} text-white`
                       : tk.navBtn
                   }`}
+                  aria-label="Wardrobe"
                 >
                   <Shirt size={14} />
                   <span className="hidden sm:inline">Wardrobe</span>
                 </button>
                 <button
-                  onClick={() =>
-                    setView(
-                      accountType === "business"
-                        ? "business dashboard"
-                        : "consumer dashboard"
-                    )
-                  }
+                  onClick={() => setView("consumer dashboard")}
                   className={`px-3 sm:px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                    view === "consumer dashboard" ||
-                    view === "business dashboard"
+                    view === "consumer dashboard"
                       ? isDark
                         ? "bg-slate-100 text-slate-900"
                         : "bg-slate-900 text-white"
                       : tk.navBtn
                   }`}
+                  aria-label="Dashboard"
                 >
                   <span className="hidden sm:inline">Dashboard</span>
                   <span className="sm:hidden">Home</span>
@@ -953,7 +744,7 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Auth / intermediate pages */}
+          {/* Auth / intermediate pages: just show dark toggle */}
           {[
             "signup",
             "signin",
@@ -967,7 +758,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Mobile hamburger (landing only) */}
+          {/* ── Mobile hamburger (landing only) */}
           {view === "landing" && (
             <div className="md:hidden flex items-center gap-2 ml-auto">
               <DarkToggle />
@@ -975,6 +766,7 @@ export default function App() {
                 className={`p-2 ${tk.subtleText}`}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 aria-label="Toggle navigation"
+                aria-expanded={isMenuOpen}
               >
                 {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
@@ -1021,10 +813,10 @@ export default function App() {
         </AnimatePresence>
       </header>
 
-      {/* ════════════════════════ MAIN ════════════════════════════════════════ */}
+      {/* ═══════════════════════════ MAIN ════════════════════════════════════ */}
       <main className="flex-1 flex flex-col">
         <AnimatePresence mode="wait">
-          {/* ══════════════ LANDING ══════════════ */}
+          {/* ═══════════ LANDING ═══════════ */}
           {view === "landing" && (
             <motion.div
               key="landing"
@@ -1095,6 +887,7 @@ export default function App() {
                 </div>
               </section>
 
+              {/* Scroll indicator */}
               <div className="flex justify-center pb-8">
                 <motion.div
                   animate={{ y: [0, 10, 0] }}
@@ -1108,6 +901,7 @@ export default function App() {
                 </motion.div>
               </div>
 
+              {/* Meet the team header */}
               <section
                 id="MeetTheTeam"
                 className={`pt-16 pb-10 ${tk.surfaceBg} px-4 sm:px-6`}
@@ -1141,6 +935,7 @@ export default function App() {
                 </motion.div>
               </section>
 
+              {/* Pull-quote */}
               <section className="py-10 px-4 sm:px-6">
                 <div className="max-w-4xl mx-auto text-center">
                   <motion.h2
@@ -1155,6 +950,7 @@ export default function App() {
                 </div>
               </section>
 
+              {/* Team grid */}
               <section className="pt-4 pb-24 px-4 sm:px-6">
                 <div className="max-w-7xl mx-auto grid sm:grid-cols-2 md:grid-cols-3 gap-10">
                   {[
@@ -1213,7 +1009,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ SIGN UP / SIGN IN ══════════════ */}
+          {/* Sign up/sign in */}
           {(view === "signup" || view === "signin") && (
             <motion.div
               key={view}
@@ -1266,20 +1062,27 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Error message */}
-                {authError && (
-                  <div
-                    className={`flex items-start gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm`}
-                  >
-                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                    <span>{authError}</span>
-                  </div>
-                )}
-
                 <form
                   className="space-y-4"
-                  onSubmit={view === "signup" ? handleRegister : handleLogin}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (view === "signup") {
+                      const fd = new FormData(e.currentTarget);
+                      setUser({
+                        firstName:
+                          (fd.get("firstName") as string) ||
+                          (fd.get("businessName") as string) ||
+                          "",
+                        lastName: (fd.get("lastName") as string) || "",
+                        email: fd.get("email") as string,
+                      });
+                      setView("onboarding");
+                    } else {
+                      setView("consumer dashboard");
+                    }
+                  }}
                 >
+                  {/* Consumer fields */}
                   {view === "signup" && accountType === "consumer" && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -1313,6 +1116,7 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Business fields */}
                   {view === "signup" && accountType === "business" && (
                     <>
                       <div>
@@ -1389,7 +1193,6 @@ export default function App() {
                     </label>
                     <input
                       id="password"
-                      name="password"
                       type="password"
                       required
                       className={inputCls}
@@ -1402,23 +1205,17 @@ export default function App() {
 
                   <button
                     type="submit"
-                    disabled={authLoading}
-                    className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all shadow-lg mt-2 flex items-center justify-center gap-2 group text-base disabled:opacity-60`}
+                    className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all shadow-lg mt-2 flex items-center justify-center gap-2 group text-base`}
                   >
-                    {authLoading ? (
-                      <Loader2 size={18} className="animate-spin" />
-                    ) : null}
                     {view === "signup"
                       ? accountType === "business"
                         ? "Create Business Account"
                         : "Create Account"
                       : "Sign In"}
-                    {!authLoading && (
-                      <ArrowRight
-                        size={18}
-                        className="group-hover:translate-x-1 transition-transform"
-                      />
-                    )}
+                    <ArrowRight
+                      size={18}
+                      className="group-hover:translate-x-1 transition-transform"
+                    />
                   </button>
                 </form>
 
@@ -1427,10 +1224,7 @@ export default function App() {
                     <>
                       Already have an account?{" "}
                       <button
-                        onClick={() => {
-                          setAuthError("");
-                          setView("signin");
-                        }}
+                        onClick={() => setView("signin")}
                         className={`${tk.accentText} font-semibold hover:underline`}
                       >
                         Sign in
@@ -1440,10 +1234,7 @@ export default function App() {
                     <>
                       Don't have an account?{" "}
                       <button
-                        onClick={() => {
-                          setAuthError("");
-                          setView("signup");
-                        }}
+                        onClick={() => setView("signup")}
                         className={`${tk.accentText} font-semibold hover:underline`}
                       >
                         Sign up
@@ -1455,7 +1246,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ ONBOARDING ══════════════ */}
+          {/*ONBOARDING*/}
           {view === "onboarding" && (
             <motion.div
               key="onboarding"
@@ -1558,7 +1349,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ VERIFICATION ══════════════ */}
+          {/*VERIFICATION*/}
           {view === "verification" && (
             <motion.div
               key="verification"
@@ -1576,35 +1367,36 @@ export default function App() {
                   <Mail size={32} />
                 </div>
                 <h2 className={`text-2xl font-bold ${tk.headingText} mb-3`}>
-                  Connect Your Gmail
+                  Verify your Email
                 </h2>
                 <p
                   className={`text-base ${tk.subtleText} mb-8 leading-relaxed`}
                 >
-                  WardrobeSuite needs read-only access to your Gmail to scan for
-                  purchase receipts. Click below to authorize access securely
-                  via Google.
+                  We've sent a verification link to{" "}
+                  <span className={`font-semibold ${tk.headingText}`}>
+                    {user.email}
+                  </span>
+                  . Click the link to connect your account and start scanning.
                 </p>
                 <button
                   onClick={() => {
                     setIsVerified(true);
-                    startGmailOAuth();
+                    startScanning();
                   }}
                   className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold ${tk.accentHover} transition-all flex items-center justify-center gap-2 text-base`}
                 >
-                  <CheckCircle size={20} /> Connect Gmail & Start Scanning
+                  <CheckCircle size={20} /> I've Verified My Email
                 </button>
                 <button
-                  onClick={() => startScanning()}
                   className={`mt-4 text-sm font-medium ${tk.mutedText} hover:${tk.accentText} transition-colors`}
                 >
-                  Skip for now (use demo data)
+                  Resend verification link
                 </button>
               </div>
             </motion.div>
           )}
 
-          {/* ══════════════ SCANNING ══════════════ */}
+          {/*SCANNING*/}
           {view === "scanning" && (
             <motion.div
               key="scanning"
@@ -1694,7 +1486,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ REVIEW (swipe) ══════════════ */}
+          {/*Item review swiping*/}
           {view === "review" && (
             <motion.div
               key="review"
@@ -1713,200 +1505,105 @@ export default function App() {
                   Swipe right for clothing, left for everything else.
                 </p>
               </div>
-
-              {itemsToReview.length === 0 ? (
-                // No items from backend — show completion screen
-                <div
-                  className={`w-full max-w-[300px] aspect-[3/4] flex flex-col items-center justify-center text-center p-6 ${tk.surfaceBg} rounded-3xl border-2 border-dashed ${tk.border}`}
-                >
-                  <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
-                    <CheckCircle size={26} />
-                  </div>
-                  <h3 className={`text-xl font-bold ${tk.headingText} mb-1`}>
-                    All Done!
-                  </h3>
-                  <p className={`text-sm ${tk.subtleText} mb-6`}>
-                    No items to review right now.
-                  </p>
-                  <button
-                    onClick={() =>
-                      setView(
-                        accountType === "business"
-                          ? "business dashboard"
-                          : "consumer dashboard"
-                      )
-                    }
-                    className={`px-6 py-3 ${
-                      isDark
-                        ? "bg-slate-200 text-slate-900 hover:bg-white"
-                        : "bg-slate-900 text-white hover:bg-slate-800"
-                    } rounded-2xl font-bold transition-all text-sm`}
+              <div className="relative w-full max-w-[300px] sm:max-w-[320px] aspect-[3/4]">
+                <AnimatePresence mode="popLayout">
+                  {itemsToReview
+                    .slice(reviewIndex, reviewIndex + 1)
+                    .map((item) => (
+                      <motion.div
+                        key={item.id}
+                        drag="x"
+                        dragConstraints={{ left: 0, right: 0 }}
+                        onDragEnd={(_, info) => {
+                          if (info.offset.x > 80) handleSwipe("right");
+                          else if (info.offset.x < -80) handleSwipe("left");
+                        }}
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{
+                          x: swipeDirection === "right" ? 400 : -400,
+                          opacity: 0,
+                          rotate: swipeDirection === "right" ? 15 : -15,
+                        }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 300,
+                          damping: 30,
+                        }}
+                        className={`absolute inset-0 ${tk.swipeCard} rounded-3xl shadow-xl border overflow-hidden cursor-grab active:cursor-grabbing`}
+                      >
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-3/5 object-cover pointer-events-none"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="p-5">
+                          <h3
+                            className={`text-xl font-bold ${tk.headingText} mb-1`}
+                          >
+                            {item.name}
+                          </h3>
+                          <p className={`font-bold text-xl ${tk.accentText}`}>
+                            ${item.price}
+                          </p>
+                          {item.isClothing && (
+                            <span
+                              className={`inline-block mt-2 px-3 py-1 ${tk.accentSubtle} ${tk.accentSubtleText} text-xs font-bold rounded-full uppercase tracking-wider`}
+                            >
+                              {item.category}
+                            </span>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                </AnimatePresence>
+                {reviewIndex >= itemsToReview.length && (
+                  <div
+                    className={`absolute inset-0 flex flex-col items-center justify-center text-center p-6 ${tk.surfaceBg} rounded-3xl border-2 border-dashed ${tk.border}`}
                   >
-                    Go to Dashboard
+                    <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                      <CheckCircle size={26} />
+                    </div>
+                    <h3 className={`text-xl font-bold ${tk.headingText} mb-1`}>
+                      All Done!
+                    </h3>
+                    <p className={`text-sm ${tk.subtleText} mb-6`}>
+                      You've reviewed all scanned items. Let's head to your
+                      dashboard!
+                    </p>
+                    <button
+                      onClick={() => setView("consumer dashboard")}
+                      className={`px-6 py-3 ${
+                        isDark
+                          ? "bg-slate-200 text-slate-900 hover:bg-white"
+                          : "bg-slate-900 text-white hover:bg-slate-800"
+                      } rounded-2xl font-bold transition-all text-sm`}
+                    >
+                      Go to Dashboard
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Tap buttons accessibility */}
+              {reviewIndex < itemsToReview.length && (
+                <div className="flex gap-4 mt-6">
+                  <button
+                    onClick={() => handleSwipe("left")}
+                    className={`px-7 py-3 ${tk.mutedBg} ${tk.bodyText} rounded-2xl font-bold text-sm hover:opacity-80 transition-all border ${tk.border}`}
+                    aria-label="Skip — not clothing"
+                  >
+                    ✕ Skip
+                  </button>
+                  <button
+                    onClick={() => handleSwipe("right")}
+                    className={`px-7 py-3 ${tk.accentBg} text-white rounded-2xl font-bold text-sm ${tk.accentHover} transition-all`}
+                    aria-label="Add to wardrobe"
+                  >
+                    ✓ Add
                   </button>
                 </div>
-              ) : (
-                <>
-                  <div className="relative w-full max-w-[300px] sm:max-w-[320px] aspect-[3/4]">
-                    <AnimatePresence mode="popLayout">
-                      {!reviewDone && currentReviewItem && (
-                        <motion.div
-                          key={currentReviewItem.id}
-                          drag="x"
-                          dragConstraints={{ left: 0, right: 0 }}
-                          onDragEnd={(_, info) => {
-                            if (info.offset.x > 80) handleSwipe("right");
-                            else if (info.offset.x < -80) handleSwipe("left");
-                          }}
-                          initial={{ scale: 0.9, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{
-                            x: swipeDirection === "right" ? 400 : -400,
-                            opacity: 0,
-                            rotate: swipeDirection === "right" ? 15 : -15,
-                          }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 30,
-                          }}
-                          className={`absolute inset-0 ${tk.swipeCard} rounded-3xl shadow-xl border overflow-hidden cursor-grab active:cursor-grabbing`}
-                        >
-                          <img
-                            src={
-                              currentReviewItem.image_url ||
-                              "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&q=80&w=800"
-                            }
-                            alt={currentReviewItem.item_name}
-                            className="w-full h-3/5 object-cover pointer-events-none"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="p-5">
-                            <h3
-                              className={`text-xl font-bold ${tk.headingText} mb-1`}
-                            >
-                              {currentReviewItem.item_name}
-                            </h3>
-                            {currentReviewItem.price_missing ? (
-                              <div className="mt-2">
-                                <p className={`text-xs ${tk.mutedText} mb-1`}>
-                                  Price not found — enter manually:
-                                </p>
-                                <div className="relative">
-                                  <span
-                                    className={`absolute left-3 top-1/2 -translate-y-1/2 font-bold ${tk.mutedText}`}
-                                  >
-                                    $
-                                  </span>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={manualPrice}
-                                    onChange={(e) =>
-                                      setManualPrice(e.target.value)
-                                    }
-                                    onClick={(e) => e.stopPropagation()}
-                                    placeholder="0.00"
-                                    className={`w-full pl-7 pr-3 py-2 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-base ${tk.inputFocus} ${tk.inputText} focus:outline-none focus:ring-2 transition-all`}
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <p
-                                className={`font-bold text-xl ${tk.accentText}`}
-                              >
-                                $
-                                {currentReviewItem.price_cents
-                                  ? (
-                                      currentReviewItem.price_cents / 100
-                                    ).toFixed(2)
-                                  : "—"}
-                              </p>
-                            )}
-                            {currentReviewItem.category && (
-                              <span
-                                className={`inline-block mt-2 px-3 py-1 ${tk.accentSubtle} ${tk.accentSubtleText} text-xs font-bold rounded-full uppercase tracking-wider`}
-                              >
-                                {currentReviewItem.category}
-                              </span>
-                            )}
-                            {currentReviewItem.merchant && (
-                              <p className={`text-xs ${tk.mutedText} mt-1`}>
-                                from {currentReviewItem.merchant}
-                              </p>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {reviewDone && (
-                      <div
-                        className={`absolute inset-0 flex flex-col items-center justify-center text-center p-6 ${tk.surfaceBg} rounded-3xl border-2 border-dashed ${tk.border}`}
-                      >
-                        <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
-                          <CheckCircle size={26} />
-                        </div>
-                        <h3
-                          className={`text-xl font-bold ${tk.headingText} mb-1`}
-                        >
-                          All Done!
-                        </h3>
-                        <p className={`text-sm ${tk.subtleText} mb-6`}>
-                          You've reviewed all scanned items. Let's head to your
-                          dashboard!
-                        </p>
-                        <button
-                          onClick={() =>
-                            setView(
-                              accountType === "business"
-                                ? "business dashboard"
-                                : "consumer dashboard"
-                            )
-                          }
-                          className={`px-6 py-3 ${
-                            isDark
-                              ? "bg-slate-200 text-slate-900 hover:bg-white"
-                              : "bg-slate-900 text-white hover:bg-slate-800"
-                          } rounded-2xl font-bold transition-all text-sm`}
-                        >
-                          Go to Dashboard
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {!reviewDone && (
-                    <div className="flex gap-4 mt-6">
-                      <button
-                        onClick={() => handleSwipe("left")}
-                        className={`px-7 py-3 ${tk.mutedBg} ${tk.bodyText} rounded-2xl font-bold text-sm hover:opacity-80 transition-all border ${tk.border}`}
-                        aria-label="Skip — not clothing"
-                      >
-                        ✕ Skip
-                      </button>
-                      <button
-                        onClick={() => handleSwipe("right")}
-                        disabled={!canApprove}
-                        className={`px-7 py-3 text-white rounded-2xl font-bold text-sm transition-all ${
-                          canApprove
-                            ? `${tk.accentBg} ${tk.accentHover}`
-                            : `${tk.mutedBg} ${tk.mutedText} cursor-not-allowed`
-                        }`}
-                        aria-label="Add to wardrobe"
-                      >
-                        ✓ Add
-                      </button>
-                    </div>
-                  )}
-
-                  {!reviewDone && (
-                    <p className={`mt-3 text-xs ${tk.mutedText}`}>
-                      {reviewIndex + 1} / {itemsToReview.length}
-                    </p>
-                  )}
-                </>
               )}
 
               <AnimatePresence>
@@ -1946,7 +1643,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ CONSUMER DASHBOARD ══════════════ */}
+          {/* DASHBOARD */}
           {view === "consumer dashboard" && (
             <motion.div
               key="consumer dashboard"
@@ -2155,124 +1852,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ BUSINESS DASHBOARD ══════════════ */}
-          {view === "business dashboard" && (
-            <motion.div
-              key="business dashboard"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="pt-20 sm:pt-24 pb-10 px-4 sm:px-6 max-w-screen-xl mx-auto flex-1 w-full"
-            >
-              <div className="mb-8">
-                <h2
-                  className={`text-2xl sm:text-3xl font-bold ${tk.headingText}`}
-                >
-                  Business Dashboard 👔
-                </h2>
-                <p className={`text-base ${tk.subtleText} mt-0.5`}>
-                  Analytics overview for {user.firstName || "your business"}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  onClick={() => startScanning()}
-                  className={`p-4 sm:p-5 ${tk.accentBg} rounded-2xl text-white shadow-lg flex flex-col justify-between group cursor-pointer`}
-                >
-                  <div>
-                    <h3 className="text-sm sm:text-base font-bold mb-1">
-                      Scan Emails
-                    </h3>
-                    <p className="text-xs text-white/70 hidden sm:block">
-                      Sync purchase data from Gmail.
-                    </p>
-                  </div>
-                  <div className="flex justify-end mt-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center group-hover:bg-white/30 transition-all">
-                      <RefreshCw size={16} />
-                    </div>
-                  </div>
-                </motion.div>
-
-                <div
-                  className={`p-4 sm:p-5 ${tk.cardBg} rounded-2xl border ${tk.border} shadow-sm flex flex-col justify-center`}
-                >
-                  <span
-                    className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-1 block`}
-                  >
-                    Total Scanned
-                  </span>
-                  <div
-                    className={`text-xl sm:text-2xl font-bold ${tk.headingText} mb-1`}
-                  >
-                    {scannedCount}
-                  </div>
-                  <p className={`text-xs ${tk.mutedText}`}>
-                    Items found from Gmail
-                  </p>
-                </div>
-
-                <div
-                  className={`p-4 sm:p-5 ${tk.cardBg} rounded-2xl border ${tk.border} shadow-sm flex flex-col justify-center`}
-                >
-                  <span
-                    className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-1 block`}
-                  >
-                    In Wardrobe
-                  </span>
-                  <div
-                    className={`text-xl sm:text-2xl font-bold ${tk.skyText} mb-1`}
-                  >
-                    {wardrobeItems.length}
-                  </div>
-                  <p className={`text-xs ${tk.mutedText}`}>Approved items</p>
-                </div>
-
-                <div
-                  className={`p-4 sm:p-5 ${tk.cardBg} rounded-2xl border ${tk.border} shadow-sm flex flex-col justify-center`}
-                >
-                  <span
-                    className={`text-xs font-bold uppercase tracking-widest ${tk.mutedText} mb-1 block`}
-                  >
-                    Avg Purchase
-                  </span>
-                  <div
-                    className={`text-xl sm:text-2xl font-bold text-emerald-500 mb-1`}
-                  >
-                    ${historicalSpend.toFixed(0)}
-                  </div>
-                  <p className={`text-xs ${tk.mutedText}`}>
-                    Per item (90 days)
-                  </p>
-                </div>
-              </div>
-
-              {/* Analytics hint */}
-              <div
-                className={`p-6 ${tk.surfaceBg} rounded-3xl border ${tk.border}`}
-              >
-                <h3 className={`text-lg font-bold ${tk.headingText} mb-2`}>
-                  Purchase Analytics
-                </h3>
-                <p className={`text-sm ${tk.subtleText} leading-relaxed`}>
-                  After scanning your Gmail, detailed analytics about merchant
-                  frequency, category spending, and purchase trends will appear
-                  here. Run a scan to populate your analytics data.
-                </p>
-                <button
-                  onClick={() => startScanning()}
-                  className={`mt-4 px-5 py-2.5 ${tk.accentBg} text-white rounded-xl font-bold text-sm ${tk.accentHover} transition-all`}
-                >
-                  Run First Scan
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ══════════════ WARDROBE ══════════════ */}
+          {/* WARDROBE*/}
           {view === "wardrobe" && (
             <motion.div
               key="wardrobe"
@@ -2281,6 +1861,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="pt-20 sm:pt-24 pb-10 px-4 sm:px-6 max-w-screen-xl mx-auto flex-1 w-full"
             >
+              {/* Page header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
                 <div>
                   <h2
@@ -2315,10 +1896,11 @@ export default function App() {
                   outfitBuilderOpen ? "flex-col lg:flex-row" : "flex-col"
                 }`}
               >
+                {/* Items side */}
                 <div
                   className={outfitBuilderOpen ? "lg:flex-1 min-w-0" : "w-full"}
                 >
-                  {/* Search + Filter */}
+                  {/* Search + Filter bar */}
                   <div className="mb-5 flex items-center gap-3">
                     <div className="relative flex-1 max-w-sm">
                       <Search
@@ -2334,10 +1916,13 @@ export default function App() {
                         className={`w-full pl-10 pr-4 py-2.5 ${tk.inputBg} border ${tk.inputBorder} rounded-xl text-base ${tk.inputFocus} ${tk.inputText} placeholder:${tk.mutedText} focus:outline-none focus:ring-2 transition-all`}
                       />
                     </div>
+
+                    {/* Filter button + panel */}
                     <div className="relative">
                       <button
                         onClick={() => setFilterOpen((o) => !o)}
                         aria-expanded={filterOpen}
+                        aria-haspopup="dialog"
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${
                           activeCategory !== "All"
                             ? `${tk.accentBg} text-white border-transparent`
@@ -2355,14 +1940,17 @@ export default function App() {
                           }`}
                         />
                       </button>
+
                       <AnimatePresence>
                         {filterOpen && (
                           <>
+                            {/* Mobile backdrop */}
                             <div
                               className="fixed inset-0 bg-black/30 z-30 md:hidden"
                               onClick={() => setFilterOpen(false)}
                               aria-hidden="true"
                             />
+
                             <motion.div
                               role="dialog"
                               aria-label="Filter wardrobe"
@@ -2370,11 +1958,17 @@ export default function App() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: 8 }}
                               transition={{ duration: 0.2 }}
-                              className={`fixed inset-x-0 bottom-0 z-40 ${tk.filterBg} rounded-t-3xl shadow-2xl p-5 max-h-[85vh] overflow-y-auto md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-72 md:rounded-2xl md:shadow-xl md:max-h-none md:overflow-visible border ${tk.border}`}
+                              className={`
+                                fixed inset-x-0 bottom-0 z-40 ${tk.filterBg} rounded-t-3xl shadow-2xl p-5 max-h-[85vh] overflow-y-auto
+                                md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2
+                                md:w-72 md:rounded-2xl md:shadow-xl md:max-h-none md:overflow-visible border ${tk.border}
+                              `}
                             >
+                              {/* Mobile drag handle */}
                               <div
                                 className={`w-10 h-1 ${tk.mutedBg} rounded-full mx-auto mb-5 md:hidden`}
                               />
+
                               <div className="flex justify-between items-center mb-4">
                                 <h3
                                   className={`text-base font-bold ${tk.headingText}`}
@@ -2389,6 +1983,7 @@ export default function App() {
                                   <X size={18} />
                                 </button>
                               </div>
+
                               <div className="space-y-2">
                                 <FilterSection
                                   title="Category"
@@ -2416,6 +2011,7 @@ export default function App() {
                                     ))}
                                   </div>
                                 </FilterSection>
+
                                 <FilterSection
                                   title="Season"
                                   isOpen={openSection === "season"}
@@ -2439,6 +2035,7 @@ export default function App() {
                                     )}
                                   </div>
                                 </FilterSection>
+
                                 <FilterSection
                                   title="Sleeve Length"
                                   isOpen={openSection === "sleeve"}
@@ -2462,6 +2059,7 @@ export default function App() {
                                     )}
                                   </div>
                                 </FilterSection>
+
                                 <FilterSection
                                   title="Color"
                                   isOpen={openSection === "color"}
@@ -2495,6 +2093,7 @@ export default function App() {
                                     ))}
                                   </div>
                                 </FilterSection>
+
                                 <FilterSection
                                   title="Fit"
                                   isOpen={openSection === "fit"}
@@ -2522,6 +2121,7 @@ export default function App() {
                                   </div>
                                 </FilterSection>
                               </div>
+
                               <div
                                 className={`mt-5 pt-4 border-t ${tk.border} flex justify-between items-center`}
                               >
@@ -2646,6 +2246,8 @@ export default function App() {
                             Outfit Builder
                           </h3>
                         </div>
+
+                        {/* Outfit chips */}
                         <div className="flex gap-2 flex-wrap mb-4">
                           {outfits.map((outfit) => (
                             <button
@@ -2681,6 +2283,8 @@ export default function App() {
                             </button>
                           ))}
                         </div>
+
+                        {/* New outfit input or button */}
                         {isCreatingOutfit ? (
                           <div className="flex gap-2 mb-4">
                             <input
@@ -2717,6 +2321,8 @@ export default function App() {
                             <Plus size={15} /> New Outfit
                           </button>
                         )}
+
+                        {/* Active outfit items */}
                         {activeOutfit ? (
                           <div>
                             <div className="flex items-center justify-between mb-3">
@@ -2833,7 +2439,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* ══════════════ PROFILE ══════════════ */}
+          {/* User profile */}
           {view === "profile" && (
             <motion.div
               key="profile"
@@ -2847,23 +2453,13 @@ export default function App() {
               >
                 <div className="flex justify-between items-center mb-8">
                   <button
-                    onClick={() =>
-                      setView(
-                        accountType === "business"
-                          ? "business dashboard"
-                          : "consumer dashboard"
-                      )
-                    }
+                    onClick={() => setView("consumer dashboard")}
                     className={`text-sm font-bold ${tk.mutedText} hover:${tk.accentText} transition-colors flex items-center gap-1.5`}
                   >
                     <ChevronLeft size={16} /> Back to Dashboard
                   </button>
                   <button
-                    onClick={() => {
-                      setUserId("");
-                      setUser({ firstName: "", lastName: "", email: "" });
-                      setView("landing");
-                    }}
+                    onClick={() => setView("landing")}
                     className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors"
                   >
                     Sign Out
@@ -2882,13 +2478,6 @@ export default function App() {
                             `${user.firstName} ${user.lastName}`.trim() || "—",
                         },
                         { label: "Email Address", value: user.email || "—" },
-                        {
-                          label: "Account Type",
-                          value:
-                            accountType === "business"
-                              ? "Business"
-                              : "Consumer",
-                        },
                       ].map(({ label, value }) => (
                         <div
                           key={label}
@@ -2959,13 +2548,7 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={() =>
-                          setView(
-                            accountType === "business"
-                              ? "business dashboard"
-                              : "consumer dashboard"
-                          )
-                        }
+                        onClick={() => setView("consumer dashboard")}
                         className={`w-full py-4 ${tk.accentBg} text-white rounded-2xl font-bold text-base ${tk.accentHover} transition-all shadow-lg`}
                       >
                         Save Settings
@@ -2979,7 +2562,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* FOOTER */}
+      {/* Footer*/}
       <footer
         className={`py-6 border-t ${tk.border} px-4 sm:px-6 ${tk.pageBg} transition-colors duration-300`}
       >
