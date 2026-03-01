@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Never commit the venv folder — it's hundreds of megabytes
 venv/
 
@@ -12,3 +13,10 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+=======
+.env
+.DS_Store
+.idea
+*.log
+tmp/
+>>>>>>> 76a7a90e8c58d12e1f4b1bb390a03f0beb69d8b5

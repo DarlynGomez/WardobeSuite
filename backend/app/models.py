@@ -20,6 +20,7 @@ class User(Base):
     email         = Column(String, unique=True, nullable=False, index=True)
     first_name    = Column(String, nullable=True)
     last_name     = Column(String, nullable=True)
+    account_type  = Column(String, default="consumer")   # "consumer" | "business"
     # Stores a salted SHA-256 hash. We never store plaintext passwords.
     # Format: "sha256:<salt>:<hash>"
     password_hash = Column(String, nullable=True)
@@ -31,6 +32,7 @@ class User(Base):
     scan_settings    = relationship("ScanSettings", back_populates="user", uselist=False)
     review_items     = relationship("ReviewQueueItem", back_populates="user")
     items            = relationship("Item", back_populates="user")
+    analytics        = relationship("UserAnalytics", back_populates="user", uselist=False)
 
     # ── Password helpers ──────────────────────────────────────────────────────
 
@@ -111,3 +113,42 @@ class Item(Base):
     created_at   = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="items")
+
+
+class UserAnalytics(Base):
+    """
+    Business analytics table — computed by emailparser.compute_and_store_analytics()
+    after every Gmail scan. One row per user, upserted each scan.
+
+    Mirrors the schema in querys.sql but uses SQLAlchemy so it lives in the
+    same wardrobe.db file as everything else.
+    """
+    __tablename__ = "user_analytics"
+
+    id                          = Column(String, primary_key=True, default=generate_uuid)
+    user_id                     = Column(String, nullable=False, unique=True, index=True)
+
+    # Aggregate totals
+    total_spending_cents        = Column(Integer, default=0)
+    total_purchases             = Column(Integer, default=0)
+    average_purchase_cents      = Column(Integer, default=0)
+
+    # Merchant stats
+    frequent_merchant           = Column(String, nullable=True)
+    frequent_merchant_amount    = Column(Integer, default=0)
+    merchant_freq_json          = Column(Text, default="{}")  # {merchant: count}
+    most_spent_merchant         = Column(String, nullable=True)
+    most_spent_merchant_amount  = Column(Integer, default=0)
+    merchant_spending_json      = Column(Text, default="{}")  # {merchant: cents}
+
+    # Category stats
+    frequent_category           = Column(String, nullable=True)
+    frequent_category_amount    = Column(Integer, default=0)
+    category_freq_json          = Column(Text, default="{}")  # {category: count}
+    most_spent_category         = Column(String, nullable=True)
+    most_spent_category_amount  = Column(Integer, default=0)
+    category_spending_json      = Column(Text, default="{}")  # {category: cents}
+
+    updated_at                  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="analytics")
